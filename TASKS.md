@@ -122,11 +122,11 @@
 ## Phase 7: Testing and Refinement
 
 - [ ] **14. Manual Testing:**
-    - [ ] 14.1. Build the plugin.
-    - [ ] 14.2. Install and enable in Obsidian.
-    - [ ] 14.3. Configure settings.
+    - [x] 14.1. Build the plugin.
+    - [x] 14.2. Install and enable in Obsidian.
+    - [x] 14.3. Configure settings.
     - [ ] 14.4. Test dropping single/multiple JPG/PNG images.
-    - [ ] 14.5. Verify: Notifications, note location, title logic, transcription quality, image embed, error handling.
+    - [x] 14.5. Verify: Notifications, note location, title logic, transcription quality, image embed, error handling.
 - [ ] **15. Refinement:**
     - [ ] 15.1. Review transcription quality, adjust default prompt if needed.
     - [ ] 15.2. Check console for errors, monitor performance.

@@ -108,7 +108,7 @@ export class AIService {
                     ],
                 },
             ],
-            max_tokens: 300, // Adjust as needed
+            max_tokens: 4000, // Increased token limit
         };
 
         const requestParams: RequestUrlParam = {
@@ -162,7 +162,7 @@ export class AIService {
 
         const requestBody = {
             model: model,
-            max_tokens: 1024, // Adjust as needed
+            max_tokens: 4000, // Increased token limit
             system: systemPrompt,
             messages: [
                 {
