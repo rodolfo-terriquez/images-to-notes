@@ -21,8 +21,9 @@ export class TranscriptionQueue {
     /**
      * Adds a file to the transcription queue.
      * @param file The image file to transcribe.
+     * @param originalParentPath The original folder path where the image was created.
      */
-    addToQueue(file: TFile) {
+    addToQueue(file: TFile, originalParentPath: string) {
         // Avoid adding duplicates if the file is already pending or processing
         const exists = this.queue.some(job => job.file.path === file.path && (job.status === 'pending' || job.status === 'processing'));
         if (exists) {
@@ -32,6 +33,7 @@ export class TranscriptionQueue {
 
         const newJob: TranscriptionJob = {
             file: file,
+            originalParentPath: originalParentPath,
             status: 'pending',
         };
         this.queue.push(newJob);

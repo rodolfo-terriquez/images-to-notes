@@ -1,8 +1,8 @@
-import { Plugin, TAbstractFile, TFile } from 'obsidian';
+import { Plugin, TAbstractFile, TFile, normalizePath } from 'obsidian';
 import { PluginSettings, DEFAULT_SETTINGS } from 'models/settings';
 import { TranscriptionSettingTab } from 'ui/settingsTab';
 import { TranscriptionQueue } from './services/transcriptionQueue';
-import { isImageFile } from './utils/fileUtils';
+import { isImageFile, getParentFolderPath } from './utils/fileUtils';
 import { convertHeicToJpg, compressImage } from './utils/imageUtils';
 import { NotificationService } from './ui/notificationService';
 import { AIService } from './services/aiService';
@@ -91,9 +91,60 @@ export default class ImageTranscriberPlugin extends Plugin {
 			}
 			// --- End Compression Step ---
 
-			// Add the file (original, converted, or compressed) to the queue
-			console.log(`Adding to transcription queue: ${fileToProcess.path}`);
-			this.transcriptionQueue.addToQueue(fileToProcess);
+			// Capture the original parent path BEFORE potentially moving the file
+			const originalParentPath = getParentFolderPath(fileToProcess.path);
+
+			// --- Move to Images Subfolder Step ---
+			try {
+				// const imagesFolderPath = normalizePath(`${originalParentPath}/Images`);
+				// Use the folder name from settings (defaulting to 'Images' if empty/invalid in settings)
+				const imageFolderName = this.settings.imageFolderName || DEFAULT_SETTINGS.imageFolderName;
+				const imagesFolderPath = normalizePath(`${originalParentPath}/${imageFolderName}`);
+
+				// Check if the folder exists, create if not
+				if (!await this.app.vault.adapter.exists(imagesFolderPath)) {
+					// console.log(`Creating 'Images' folder at: ${imagesFolderPath}`);
+					console.log(`Creating '${imageFolderName}' folder at: ${imagesFolderPath}`);
+					await this.app.vault.createFolder(imagesFolderPath);
+				}
+
+				// Construct the new path for the image inside the folder
+				const newImagePath = normalizePath(`${imagesFolderPath}/${fileToProcess.name}`);
+
+				// Check if a file with the same name already exists in the subfolder
+				const existingImageInSubfolder = this.app.vault.getAbstractFileByPath(newImagePath);
+				if (existingImageInSubfolder && existingImageInSubfolder instanceof TFile) {
+					// Avoid overwriting - skip moving and adding to queue if name conflicts
+					// A more robust solution might involve renaming (e.g., image_1.jpg)
+					// console.warn(`Image named '${fileToProcess.name}' already exists in '${imagesFolderPath}'. Skipping transcription for this file.`);
+					const warnMsg = `Image named '${fileToProcess.name}' already exists in '${imagesFolderPath}'. Skipping transcription for this file.`;
+					console.warn(warnMsg);
+					// this.notificationService.notifyError(`Failed to process ${fileToProcess.name}: Duplicate name exists in Images folder.`);
+					this.notificationService.notifyError(`Failed to process ${fileToProcess.name}: Duplicate name exists in '${imageFolderName}' folder.`);
+					return; // Stop processing this file
+				}
+
+				// Move the file if the path is different
+				if (fileToProcess.path !== newImagePath) {
+					console.log(`Moving image to: ${newImagePath}`);
+					await this.app.fileManager.renameFile(fileToProcess, newImagePath);
+					// fileToProcess TFile object is updated by renameFile to point to the new path
+					console.log(`Successfully moved image to: ${fileToProcess.path}`);
+				}
+
+			} catch (error) {
+				// console.error(`Error moving file ${fileToProcess.name} to 'Images' subfolder:`, error);
+				// this.notificationService.notifyError(`Failed to move ${fileToProcess.name} to Images folder. Skipping transcription.`);
+				const errorMsg = `Error moving file ${fileToProcess.name} to '${this.settings.imageFolderName || DEFAULT_SETTINGS.imageFolderName}' subfolder:`;
+				console.error(errorMsg, error);
+				this.notificationService.notifyError(`Failed to move ${fileToProcess.name} to '${this.settings.imageFolderName || DEFAULT_SETTINGS.imageFolderName}' folder. Skipping transcription.`);
+				return; // Stop processing this file if moving failed
+			}
+			// --- End Move Step ---
+
+			// Add the file (original, converted, compressed, and potentially moved) to the queue
+			console.log(`Adding to transcription queue: ${fileToProcess.path} (Original Parent: ${originalParentPath})`);
+			this.transcriptionQueue.addToQueue(fileToProcess, originalParentPath);
 
 		} else if (file instanceof TFile) {
 			// console.log(`Ignoring non-image file creation: ${file.path}`);
@@ -115,7 +166,8 @@ export default class ImageTranscriberPlugin extends Plugin {
 
 			if (transcription !== null) {
 				this.notificationService.notifyInfo(`Transcription received for ${job.file.name}. Creating note...`);
-				const noteFile = await this.noteCreator.createNote(transcription, job.file);
+				// Pass the whole job object to NoteCreator
+				const noteFile = await this.noteCreator.createNote(transcription, job);
 
 				if (noteFile) {
 					// Success! (Notification is handled by NoteCreator)

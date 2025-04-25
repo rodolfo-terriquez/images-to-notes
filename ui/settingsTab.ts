@@ -1,6 +1,6 @@
-import { App, PluginSettingTab, Setting, TextAreaComponent, DropdownComponent, TextComponent } from 'obsidian';
+import { App, PluginSettingTab, Setting, TextAreaComponent, DropdownComponent, TextComponent, Notice } from 'obsidian';
 import ImageTranscriberPlugin from '../main'; // Adjust path as needed
-import { ApiProvider, OpenAiModel, AnthropicModel } from '../models/settings'; // Import relevant types
+import { ApiProvider, OpenAiModel, AnthropicModel, DEFAULT_SETTINGS } from '../models/settings'; // Import relevant types AND DEFAULTS
 
 // Define available models - These should match the types in settings.ts
 const OPENAI_MODELS: Record<OpenAiModel, string> = {
@@ -116,12 +116,15 @@ export class TranscriptionSettingTab extends PluginSettingTab {
         }
 
         // --- System Prompt ---
+        let systemPromptTextArea: TextAreaComponent; // Variable to hold the text area component
         new Setting(containerEl)
             .setName('System Prompt')
             .setDesc('The system prompt to guide the AI model\'s behavior (e.g., role, context).')
             .addTextArea(text => {
+                systemPromptTextArea = text; // Store the component
                 text
-                    .setPlaceholder('e.g., You are an expert transcriber.')
+                    // .setPlaceholder('e.g., You are an expert transcriber.')
+                    .setPlaceholder(DEFAULT_SETTINGS.systemPrompt)
                     .setValue(this.plugin.settings.systemPrompt)
                     .onChange(async (value) => {
                         this.plugin.settings.systemPrompt = value;
@@ -129,15 +132,29 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                     });
                 text.inputEl.rows = 4; // Slightly shorter than user prompt
                 text.inputEl.style.width = '100%';
-            });
+            })
+            .addButton(button => button // Add reset button (Task 18.5)
+                .setIcon('reset')
+                .setTooltip('Reset to default')
+                .onClick(async () => {
+                    if (systemPromptTextArea) {
+                        this.plugin.settings.systemPrompt = DEFAULT_SETTINGS.systemPrompt;
+                        systemPromptTextArea.setValue(this.plugin.settings.systemPrompt);
+                        await this.plugin.saveSettings();
+                        new Notice('System prompt reset to default.');
+                    }
+                }));
 
         // --- User Prompt (Previously Transcription Prompt) ---
+        let userPromptTextArea: TextAreaComponent; // Variable to hold the text area component
         new Setting(containerEl)
             .setName('User Prompt') // Renamed from Transcription Prompt
             .setDesc('The specific instruction for the AI for this image.') // Updated description
             .addTextArea(text => {
+                userPromptTextArea = text; // Store the component
                 text
-                    .setPlaceholder('e.g., Transcribe the text in this image.')
+                    // .setPlaceholder('e.g., Transcribe the text in this image.')
+                    .setPlaceholder(DEFAULT_SETTINGS.userPrompt)
                     .setValue(this.plugin.settings.userPrompt) // Updated to use userPrompt
                     .onChange(async (value) => {
                         this.plugin.settings.userPrompt = value; // Updated to save to userPrompt
@@ -145,7 +162,18 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                     });
                 text.inputEl.rows = 6; // Make it taller
                 text.inputEl.style.width = '100%'; // Ensure it takes full width
-            });
+            })
+            .addButton(button => button // Add reset button (Task 18.5)
+                .setIcon('reset')
+                .setTooltip('Reset to default')
+                .onClick(async () => {
+                    if (userPromptTextArea) {
+                        this.plugin.settings.userPrompt = DEFAULT_SETTINGS.userPrompt;
+                        userPromptTextArea.setValue(this.plugin.settings.userPrompt);
+                        await this.plugin.saveSettings();
+                        new Notice('User prompt reset to default.');
+                    }
+                }));
 
         // --- Note Naming ---
         new Setting(containerEl)
@@ -158,6 +186,21 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.useFirstLineAsTitle.toString()) // Convert boolean to string for dropdown value
                 .onChange(async (value) => {
                     this.plugin.settings.useFirstLineAsTitle = value === 'true'; // Convert string back to boolean
+                    await this.plugin.saveSettings();
+                }));
+
+        // --- Image Folder Name --- (Task 18.1, 18.2)
+        new Setting(containerEl)
+            .setName('Image Folder Name')
+            .setDesc('The name of the subfolder within the note\'s directory where processed images will be saved. Leave empty to use the default ("Images").')
+            .addText(text => text
+                .setPlaceholder(DEFAULT_SETTINGS.imageFolderName) // Default is 'Images'
+                .setValue(this.plugin.settings.imageFolderName)
+                .onChange(async (value) => {
+                    // Use default if empty, otherwise use the provided value
+                    this.plugin.settings.imageFolderName = value.trim() || DEFAULT_SETTINGS.imageFolderName;
+                    // Reflect the potentially changed value back in the input field if it was trimmed or defaulted
+                    text.setValue(this.plugin.settings.imageFolderName);
                     await this.plugin.saveSettings();
                 }));
 
