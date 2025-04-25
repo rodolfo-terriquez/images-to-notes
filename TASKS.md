@@ -125,10 +125,16 @@
     - [x] 14.1. Build the plugin.
     - [x] 14.2. Install and enable in Obsidian.
     - [x] 14.3. Configure settings.
-    - [ ] 14.4. Test dropping single/multiple JPG/PNG images.
+    - [x] 14.4. Test dropping single/multiple JPG/PNG images.
     - [x] 14.5. Verify: Notifications, note location, title logic, transcription quality, image embed, error handling.
 - [ ] **15. Refinement:**
-    - [ ] 15.1. Review transcription quality, adjust default prompt if needed.
+    - [x] 15.1. Review transcription quality, adjust default prompt if needed.
     - [ ] 15.2. Check console for errors, monitor performance.
     - [ ] 15.3. Ensure `onunload` cleans up resources/listeners.
-```
+
+## Phase 8: version 0.1.1 improvements
+
+- [x] **16. Image conversion and resize:**
+    - [x] 16.1. Implement support for additional image formats (e.g., .HEIC).
+    - [x] 16.2. Create a utility function to convert .HEIC images to .jpg format.
+    - [x] 16.3. Implement image compression functionality to reduce file size of .jpg images before storing in the Obsidian vault.

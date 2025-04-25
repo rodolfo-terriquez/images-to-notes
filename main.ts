@@ -3,6 +3,7 @@ import { PluginSettings, DEFAULT_SETTINGS } from 'models/settings';
 import { TranscriptionSettingTab } from 'ui/settingsTab';
 import { TranscriptionQueue } from './services/transcriptionQueue';
 import { isImageFile } from './utils/fileUtils';
+import { convertHeicToJpg, compressImage } from './utils/imageUtils';
 import { NotificationService } from './ui/notificationService';
 import { AIService } from './services/aiService';
 import { NoteCreator } from './services/noteCreator';
@@ -50,10 +51,50 @@ export default class ImageTranscriberPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	private handleFileCreate(file: TAbstractFile) {
+	private async handleFileCreate(file: TAbstractFile) {
 		if (isImageFile(file)) {
-			console.log(`Detected image creation: ${file.path}`);
-			this.transcriptionQueue.addToQueue(file);
+			console.log(`Detected supported image file: ${file.path}`);
+			let fileToProcess: TFile = file; // Start with the original file
+
+			// Check if it's HEIC and attempt conversion
+			if (file.extension.toLowerCase() === 'heic') {
+				console.log(`HEIC file detected, attempting conversion: ${file.path}`);
+				const convertedFile = await convertHeicToJpg(file, this.app);
+				if (convertedFile) {
+					console.log(`HEIC converted successfully to: ${convertedFile.path}`);
+					fileToProcess = convertedFile; // Use the converted JPG file for the queue
+					// Optional: Delete original HEIC? Add setting later.
+					// try {
+					// 	await this.app.vault.trash(file, true);
+					// 	console.log(`Original HEIC file moved to system trash: ${file.path}`);
+					// } catch (trashError) {
+					// 	console.error(`Failed to move original HEIC to trash: ${file.path}`, trashError);
+					// }
+				} else {
+					console.error(`HEIC conversion failed for: ${file.path}. Skipping transcription.`);
+					return; // Stop processing this file if conversion failed
+				}
+			}
+
+			// --- Image Compression Step ---
+			// For now, compress unconditionally. Add settings toggle later.
+			// Pass the potentially converted file (`fileToProcess`) to the compression function.
+			const compressedFile = await compressImage(fileToProcess, this.app);
+			if (compressedFile) {
+				// compressImage modifies the file in place if successful,
+				// so fileToProcess reference is still valid (pointing to potentially compressed data)
+				console.log(`Compression step completed for: ${fileToProcess.path}`);
+			} else {
+				// Compression failed, but we decided to proceed with the uncompressed file
+				console.warn(`Compression failed for: ${fileToProcess.path}. Proceeding with uncompressed file.`);
+				// fileToProcess remains the uncompressed version (or the result of HEIC conversion)
+			}
+			// --- End Compression Step ---
+
+			// Add the file (original, converted, or compressed) to the queue
+			console.log(`Adding to transcription queue: ${fileToProcess.path}`);
+			this.transcriptionQueue.addToQueue(fileToProcess);
+
 		} else if (file instanceof TFile) {
 			// console.log(`Ignoring non-image file creation: ${file.path}`);
 		} else {

@@ -9,7 +9,7 @@ export function isImageFile(file: TAbstractFile): file is TFile {
     if (!(file instanceof TFile)) {
         return false;
     }
-    const supportedExtensions = ['jpg', 'jpeg', 'png'];
+    const supportedExtensions = ['jpg', 'jpeg', 'png', 'heic'];
     return supportedExtensions.includes(file.extension.toLowerCase());
 }
 

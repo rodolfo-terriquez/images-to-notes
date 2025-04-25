@@ -19,6 +19,8 @@
 		"@rollup/plugin-node-resolve": "^15.2.0",
 		"@rollup/plugin-typescript": "^11.1.0",
 		"@types/node": "^20.8.0",
+		"browser-image-compression": "^2.0.2",
+		"heic2any": "^0.0.4",
 		"obsidian": "latest",
 		"rollup": "^3.29.0",
 		"tslib": "^2.6.0",
