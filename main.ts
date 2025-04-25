@@ -15,6 +15,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 	notificationService: NotificationService;
 	aiService: AIService;
 	noteCreator: NoteCreator;
+	isReady: boolean = false;
 
 	async onload() {
 		console.log('Loading Image Transcriber Plugin');
@@ -34,7 +35,13 @@ export default class ImageTranscriberPlugin extends Plugin {
 			this.app.vault.on('create', this.handleFileCreate.bind(this))
 		);
 
-		console.log('Image Transcriber Plugin loaded and file watcher active.');
+		// Delay setting the ready flag to ignore initial file scan events
+		setTimeout(() => {
+			this.isReady = true;
+			console.log('Image Transcriber Plugin initialization complete. Ready for new images.');
+		}, 2000); // 2-second delay (adjust if needed)
+
+		console.log('Image Transcriber Plugin loaded. File watcher active, but delayed start for processing.');
 	}
 
 	onunload() {
@@ -45,6 +52,11 @@ export default class ImageTranscriberPlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		// Ensure processedImagePaths is always an array, even if saved data is corrupted/missing
+		if (!this.settings.processedImagePaths || !Array.isArray(this.settings.processedImagePaths)) {
+			console.warn('Processed image paths missing or invalid in settings data. Initializing as empty array.');
+			this.settings.processedImagePaths = [];
+		}
 	}
 
 	async saveSettings() {
@@ -52,6 +64,12 @@ export default class ImageTranscriberPlugin extends Plugin {
 	}
 
 	private async handleFileCreate(file: TAbstractFile) {
+		// Ignore events if the plugin hasn't finished its delayed initialization
+		if (!this.isReady) {
+			console.log(`Plugin not ready, ignoring create event for: ${file.path}`);
+			return;
+		}
+
 		if (isImageFile(file)) {
 			console.log(`Detected supported image file: ${file.path}`);
 			let fileToProcess: TFile = file; // Start with the original file
@@ -142,6 +160,14 @@ export default class ImageTranscriberPlugin extends Plugin {
 			}
 			// --- End Move Step ---
 
+			// Check if this image path has already been processed
+			console.log(`Checking processed paths for: ${fileToProcess.path}`);
+			console.log(`Current processed paths: ${JSON.stringify(this.settings.processedImagePaths)}`);
+			if (this.settings.processedImagePaths.includes(fileToProcess.path)) {
+				console.log(`Image already processed, skipping queue: ${fileToProcess.path}`);
+				return;
+			}
+
 			// Add the file (original, converted, compressed, and potentially moved) to the queue
 			console.log(`Adding to transcription queue: ${fileToProcess.path} (Original Parent: ${originalParentPath})`);
 			this.transcriptionQueue.addToQueue(fileToProcess, originalParentPath);
@@ -171,6 +197,11 @@ export default class ImageTranscriberPlugin extends Plugin {
 
 				if (noteFile) {
 					// Success! (Notification is handled by NoteCreator)
+					// Add the image path to the list of processed paths
+					console.log(`Attempting to mark as processed and save: ${job.file.path}`);
+					this.settings.processedImagePaths.push(job.file.path);
+					await this.saveSettings(); // Persist the change
+					console.log(`Successfully saved processed path: ${job.file.path}. New list: ${JSON.stringify(this.settings.processedImagePaths)}`);
 					this.transcriptionQueue.markAsDone(job); // Mark job as done in the queue
 				} else {
 					// Note creation failed (Notification handled by NoteCreator)
