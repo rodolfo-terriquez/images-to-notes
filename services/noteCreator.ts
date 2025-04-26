@@ -2,7 +2,6 @@ import { App, TFile, normalizePath, FileSystemAdapter } from 'obsidian';
 import { PluginSettings } from '../models/settings';
 import { NotificationService } from '../ui/notificationService';
 import { getParentFolderPath, sanitizeFilename, getFormattedDate } from '../utils/fileUtils';
-import { TranscriptionJob } from '../models/transcriptionJob';
 
 export class NoteCreator {
     constructor(
@@ -14,14 +13,14 @@ export class NoteCreator {
     /**
      * Creates a new markdown note containing the transcription and a link to the image.
      * @param transcription The transcribed text.
-     * @param job The transcription job containing the image file and original path info.
+     * @param imageFile The final TFile object for the processed image (used for linking and naming).
+     * @param noteTargetParentPath The target folder path for the new note.
      * @returns A promise that resolves with the created TFile or null if creation failed.
      */
-    async createNote(transcription: string, job: TranscriptionJob): Promise<TFile | null> {
-        const { file: imageFile, originalParentPath } = job;
+    async createNote(transcription: string, imageFile: TFile, noteTargetParentPath: string): Promise<TFile | null> {
         try {
             const title = this._generateNoteTitle(transcription, imageFile);
-            const folderPath = originalParentPath;
+            const folderPath = noteTargetParentPath;
             const uniqueNotePath = await this._findUniqueNotePath(folderPath, title);
 
             // Generate markdown link relative to the vault root
@@ -41,7 +40,7 @@ export class NoteCreator {
 
     /**
      * Generates a title for the new note based on plugin settings.
-     * It now uses the original parent path if not using first line as title.
+     * Uses the final image file for naming context.
      */
     private _generateNoteTitle(transcription: string, imageFile: TFile): string {
         let title = '';

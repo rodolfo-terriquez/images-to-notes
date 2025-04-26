@@ -204,8 +204,32 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
+        // --- Clear Processed Image History ---
+        containerEl.createEl('h3', { text: 'Maintenance' });
+        new Setting(containerEl)
+            .setName('Clear Processed Image History')
+            .setDesc(
+                'Removes the record of images that have already been processed. ' +
+                'Use this if you want the plugin to re-process images it previously skipped, ' +
+                'or if you have cleared your vault and want to reset the history. ' +
+                'Currently processed count: ' + this.plugin.settings.processedImagePaths.length
+            )
+            .addButton(button => button
+                .setButtonText('Clear History')
+                .setWarning() // Makes the button red for caution
+                .onClick(async () => {
+                    // Simple confirmation dialog
+                    if (confirm('Are you sure you want to clear the entire processed image history? This cannot be undone.')) {
+                        this.plugin.settings.processedImagePaths = [];
+                        await this.plugin.saveSettings();
+                        new Notice('Processed image history cleared.');
+                        this.display(); // Re-render the settings tab to update the count
+                    } else {
+                        new Notice('Clear history cancelled.');
+                    }
+                }));
+
         // Add a CSS snippet for the warning text styling (optional, but good UX)
-        // This would typically go in styles.css
         /*
         .setting-warning {
             color: var(--text-warning);

@@ -142,9 +142,10 @@
     - [x] 17.1. Check if an "Images" folder exists in the directory where images are dropped.
     - [x] 17.2. If the "Images" folder does not exist, create it.
     - [x] 17.3. Store all compressed and converted images in the "Images" folder.
-- [ ] **18. Quality of life improvements**
+- [x] **18. Quality of life improvements**
     - [x] 18.1. Let the user choose the default name of the 'Images' file with a text input box.
     - [x] 18.2. The default name for the folder should be 'Images'. This is also the name if the field is empty.
     - [x] 18.3. Set the default system prompt 'You are an expert at transcribing handwritten notes and typed text from images. Convert the image content to clean markdown format, preserving the structure and organization of the original notes.'
     - [x] 18.4. Set the default user prompt 'Please transcribe all text visible in this image into markdown format. Preserve the structure, headings, lists, and any other formatting from the original text. If you detect any diagrams. Analyze each one. Use the surrounding context to understand what the diagram is likely about  Replace the diagram with a well-structured explanation of the content the diagram is trying to convey. Preserve all the diagram's educational value. Place your explanation within the rest of the markdown, in its appropriate order. Use the same language in your explanation as the rest of the markdown. Do not describe the diagram, explain its content with words. Do not mention that you're describing content from a diagram, simply include it within the rest of the text with an appropriate heading. The reader will not have access to the diagram, so do not make any references to it. Do not add any mention or indication that the transcript is in markdown format at the beginning of the document.'
     - [x] 18.5. Add a reset button for both the system and user prompt so they return to the defaults
+    

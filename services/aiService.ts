@@ -1,6 +1,5 @@
-import { App, requestUrl, RequestUrlParam, RequestUrlResponse } from 'obsidian';
+import { App, requestUrl, RequestUrlParam, RequestUrlResponse, TFile } from 'obsidian';
 import { PluginSettings, OpenAiModel, AnthropicModel } from '../models/settings';
-import { TranscriptionJob } from '../models/transcriptionJob';
 import { NotificationService } from '../ui/notificationService';
 import { encodeImageToBase64 } from '../utils/fileUtils';
 
@@ -18,11 +17,10 @@ export class AIService {
 
     /**
      * Transcribes an image using the configured AI provider.
-     * @param job The transcription job containing the image file.
+     * @param file The image file to transcribe (after potential conversion/compression).
      * @returns A promise that resolves with the transcription text or null if failed.
      */
-    async transcribeImage(job: TranscriptionJob): Promise<string | null> {
-        const { file } = job;
+    async transcribeImage(file: TFile): Promise<string | null> {
         let base64ImageWithPrefix: string;
 
         // 1. Encode image
