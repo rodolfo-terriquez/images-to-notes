@@ -9,9 +9,20 @@ It supports images in the following formats: .jpg, .jpeg, .png, and .heic
 1.  Install and enable the plugin.
 2.  Configure the settings (API provider, API key, model). I recommend using GPT-4.1 Mini for its low cost and high accuracy.
 3.  Add an image file (by dragging it into a folder in the Obsidian file explorer pane).
-4.  The plugin will automatically transcribe your image into a markdown file and add the image to the file.
+4.  The plugin will transcribe your image into a new note and add the image at the bottom.
 
-**Note:** Images dragged directly into the *editor* pane of an open note will be handled by Obsidian's default embedding mechanism and will **not** be transcribed by this plugin. This is to prevent the plugin from interfering with your note taking workflow.
+![obsidian](https://github.com/user-attachments/assets/c639b86f-c014-437f-9c8d-e6b4b6cab496)
+
+## How to set up the plugin
+
+In the plugin settings:
+
+1. Choose an API provider. This is the company that provides the AI model that we'll use to transcribe your images.
+2. Paste your API key.
+3. Choose an AI model.
+
+That's it, everything else is optional.
+
 
 ## Configuration
 
@@ -23,8 +34,11 @@ There are a couple of things you can configure:
 *   **System Prompt:** This defines the overall role or context for the AI. You can change this and reset it if you mess it up.
 *   **User Prompt:** Provide the specific instructions for transcribing the image. Edit this to better suit your handwritten note style or change something about the format of the transcription.
 *   **Note Naming Conventions:**
-    *   `Folder + Date + Image Name`: Creates notes like `FolderName_YYYYMMDD_ImageName.md`.
     *   `Use First Line of Transcription`: Uses the first non-empty line of the transcription as the note title.
+    *   `Use Image Name`: Uses the image name as the note title.
+    *   `Use Date + Image Name`: Creates notes like `YYYYMMDD_ImageName.md`.
+    *   `Folder + Date + Image Name`: Creates notes like `FolderName_YYYYMMDD_ImageName.md`.
+    
 *   **Image Folder Name:** Specify the name of the subfolder where processed images should be stored (defaults to `Images`).
 *   **Maintenance:**
     *   **Clear Processed Image History:** A button to reset the list of images the plugin knows it has already processed. Useful for re-processing or after clearing parts of your vault.
