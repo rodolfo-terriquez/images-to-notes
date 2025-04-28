@@ -1,6 +1,11 @@
 # Obsidian Images to notes Plugin
 
-This plugin uses AI to transcribe photos of handwritten notes into markdown, creates a new note for each image, then adds the image to the markdown file.
+Use AI to transcribe photos of handwritten or printed notes into Markdown, creates a new note for each image, then adds the image to the bottom of the Note. 
+
+Great for:
+- Class notes
+- Office printouts
+- Random physical documents
 
 It supports images in the following formats: .jpg, .jpeg, .png, and .heic
 
@@ -8,8 +13,10 @@ It supports images in the following formats: .jpg, .jpeg, .png, and .heic
 
 1.  Install and enable the plugin.
 2.  Configure the settings (API provider, API key, model). I recommend using GPT-4.1 Mini for its low cost and high accuracy.
-3.  Add an image file (by dragging it into a folder in the Obsidian file explorer pane).
+3.  Drag and drop your image into a folder in the Obsidian file explorer pane.
 4.  The plugin will transcribe your image into a new note and add the image at the bottom.
+
+You can drag and drop multiple images at once. They will queue and process one after the other.
 
 ![obsidian](https://github.com/user-attachments/assets/c639b86f-c014-437f-9c8d-e6b4b6cab496)
 
@@ -17,7 +24,7 @@ It supports images in the following formats: .jpg, .jpeg, .png, and .heic
 
 In the plugin settings:
 
-1. Choose an API provider. This is the company that provides the AI model that we'll use to transcribe your images.
+1. Choose an API provider. This is the company that provides the AI model that the plugin will use to transcribe your images.
 2. Paste your API key.
 3. Choose an AI model.
 
