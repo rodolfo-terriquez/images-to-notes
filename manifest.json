@@ -1,9 +1,9 @@
 {
 	"id": "images-to-notes",
 	"name": "Images to Notes",
-	"version": "0.1.5",
-	"minAppVersion": "0.15.0",
-	"description": "Transcribes text from handwritten notes using AI.",
+	"version": "1.0.0",
+	"minAppVersion": "1.8.10",
+	"description": "Turn photos of handwritten or printed notes into Markdown using AI.",
 	"author": "Rodolfo Terriquez",
 	"authorUrl": "https://github.com/rodolfo-terriquez",
 	"isDesktopOnly": true
