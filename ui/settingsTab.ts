@@ -26,7 +26,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
         const { containerEl } = this;
 
         containerEl.empty();
-        containerEl.createEl('h2', { text: 'Image Transcriber Settings' });
+        containerEl.createEl('h2', { text: 'Notes to Markdown Settings' });
 
         // --- API Provider ---
         new Setting(containerEl)

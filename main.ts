@@ -20,7 +20,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 	private processingPaths = new Set<string>();
 
 	async onload() {
-		console.log('Loading Image Transcriber Plugin');
+		console.log('Loading Notes to Markdown Plugin');
 		await this.loadSettings();
 
 		this.notificationService = new NotificationService(this.settings);
@@ -46,11 +46,11 @@ export default class ImageTranscriberPlugin extends Plugin {
 			this.app.workspace.on('editor-drop', this.handleEditorDrop.bind(this))
 		);
 
-		console.log('Image Transcriber Plugin loaded. File watcher registration deferred until layout ready.');
+		console.log('Notes to Markdown Plugin loaded. File watcher registration deferred until layout ready.');
 	}
 
 	onunload() {
-		console.log('Unloading Image Transcriber Plugin');
+		console.log('Unloading Notes to Markdown Plugin');
 		// Cleanup logic: The registerEvent method handles unregistering the vault event.
 		// Queue processing might need explicit stopping if it involves long operations.
 	}

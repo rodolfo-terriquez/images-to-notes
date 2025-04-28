@@ -1,0 +1,10 @@
+{
+	"id": "notes-to-markdown",
+	"name": "Notes to Markdown",
+	"version": "0.1.5",
+	"minAppVersion": "0.15.0",
+	"description": "Transcribes text from handwritten notes using AI.",
+	"author": "Rodolfo Terriquez",
+	"authorUrl": "https://github.com/rodolfo-terriquez",
+	"isDesktopOnly": true
+}
