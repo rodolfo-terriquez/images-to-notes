@@ -1,11 +1,10 @@
 {
-	"id": "obsidian-image-transcriber",
-	"name": "Image Transcriber",
-	"version": "0.1.0",
+	"id": "notes-to-markdown",
+	"name": "Notes to Markdown",
+	"version": "0.1.5",
 	"minAppVersion": "0.15.0",
-	"description": "Transcribes text from images using AI.",
-	"author": "Your Name",
-	"authorUrl": "https://yourwebsite.com",
-	"fundingUrl": "https://buymeacoffee.com/your-link",
-	"isDesktopOnly": false
+	"description": "Transcribes text from handwritten notes using AI.",
+	"author": "Rodolfo Terriquez",
+	"authorUrl": "https://github.com/rodolfo-terriquez",
+	"isDesktopOnly": true
 }

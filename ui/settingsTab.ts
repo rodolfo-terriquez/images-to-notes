@@ -63,7 +63,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             // OpenAI Model
             new Setting(containerEl)
                 .setName('OpenAI Model')
-                .setDesc('Select the OpenAI model to use (ensure it supports vision).')
+                .setDesc('Select the OpenAI model to use. I recommend GPT-4.1 Mini for its low cost and high accuracy.')
                 .addDropdown(dropdown => {
                     // Use the imported type and constant
                     for (const modelId in OPENAI_MODELS) {
@@ -97,7 +97,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             // Anthropic Model
             new Setting(containerEl)
                 .setName('Anthropic Model')
-                .setDesc('Select the Anthropic model to use (ensure it supports vision).')
+                .setDesc('Select the Anthropic model to use.')
                 .addDropdown(dropdown => {
                     // Use the imported type and constant
                      for (const modelId in ANTHROPIC_MODELS) {
