@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting, TextAreaComponent, DropdownComponent, TextComponent, Notice } from 'obsidian';
 import ImageTranscriberPlugin from '../main'; // Adjust path as needed
-import { ApiProvider, OpenAiModel, AnthropicModel, DEFAULT_SETTINGS } from '../models/settings'; // Import relevant types AND DEFAULTS
+import { ApiProvider, OpenAiModel, AnthropicModel, DEFAULT_SETTINGS, NoteNamingOption } from '../models/settings'; // Import relevant types AND DEFAULTS AND NoteNamingOption
 
 // Define available models - These should match the types in settings.ts
 const OPENAI_MODELS: Record<OpenAiModel, string> = {
@@ -179,15 +179,19 @@ export class TranscriptionSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName('Note Naming Convention')
             .setDesc('How should the new transcription note be named?')
-            .addDropdown(dropdown => dropdown
-                 // Updated descriptions for clarity
-                .addOption('false', 'Folder + Date + Image Name (e.g., Folder_YYYYMMDD_ImageName.md)') 
-                .addOption('true', 'Use First Line of Transcription')
-                .setValue(this.plugin.settings.useFirstLineAsTitle.toString()) // Convert boolean to string for dropdown value
-                .onChange(async (value) => {
-                    this.plugin.settings.useFirstLineAsTitle = value === 'true'; // Convert string back to boolean
-                    await this.plugin.saveSettings();
-                }));
+            .addDropdown(dropdown => {
+                dropdown
+                    // Use the enum keys for values and provide user-friendly names
+                    .addOption(NoteNamingOption.FirstLine, 'Use First Line of Transcription (strips markdown)')
+                    .addOption(NoteNamingOption.ImageName, 'Use Image Name (e.g., ImageName.md)')
+                    .addOption(NoteNamingOption.DateImageName, 'Use Date + Image Name (e.g., YYYYMMDD_ImageName.md)')
+                    .addOption(NoteNamingOption.FolderDateNum, 'Use Folder + Date + Image Name (e.g., Folder_YYYYMMDD_ImageName.md)')
+                    .setValue(this.plugin.settings.noteNamingOption) // Use the enum value directly
+                    .onChange(async (value) => {
+                        this.plugin.settings.noteNamingOption = value as NoteNamingOption; // Cast the string value back to the enum type
+                        await this.plugin.saveSettings();
+                    });
+            });
 
         // --- Image Folder Name --- (Task 18.1, 18.2)
         new Setting(containerEl)

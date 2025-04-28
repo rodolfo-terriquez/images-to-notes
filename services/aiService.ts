@@ -87,7 +87,9 @@ export class AIService {
         apiKey: string,
         model: OpenAiModel
     ): Promise<string | null> {
-        console.log(`Transcribing with OpenAI (${model})...`);
+        // console.log(`Transcribing with OpenAI (${model})...`);
+        this.notificationService.notifyVerbose(`Sending image to OpenAI (${model})...`);
+        const startTime = Date.now();
 
         const requestBody = {
             model: model,
@@ -127,7 +129,9 @@ export class AIService {
                 const data = response.json;
                 const transcription = data?.choices?.[0]?.message?.content;
                 if (transcription) {
-                    console.log('OpenAI transcription successful.');
+                    // console.log('OpenAI transcription successful.');
+                    const endTime = Date.now();
+                    this.notificationService.notifyVerbose(`OpenAI Response received (${(endTime - startTime) / 1000}s).`);
                     return transcription.trim();
                 } else {
                     console.error('OpenAI response missing transcription content:', data);
@@ -156,7 +160,9 @@ export class AIService {
         apiKey: string,
         model: AnthropicModel
     ): Promise<string | null> {
-        console.log(`Transcribing with Anthropic (${model})...`);
+        // console.log(`Transcribing with Anthropic (${model})...`);
+        this.notificationService.notifyVerbose(`Sending image to Anthropic (${model})...`);
+        const startTime = Date.now();
 
         const requestBody = {
             model: model,
@@ -200,7 +206,9 @@ export class AIService {
                  // Anthropic returns content as an array, find the text block
                  const transcription = data?.content?.find((block: any) => block.type === 'text')?.text;
                 if (transcription) {
-                    console.log('Anthropic transcription successful.');
+                    // console.log('Anthropic transcription successful.');
+                    const endTime = Date.now();
+                    this.notificationService.notifyVerbose(`Anthropic Response received (${(endTime - startTime) / 1000}s).`);
                     return transcription.trim();
                 } else {
                     console.error('Anthropic response missing transcription content:', data);

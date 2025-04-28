@@ -1,7 +1,18 @@
 import { App, TFile, normalizePath, FileSystemAdapter } from 'obsidian';
-import { PluginSettings } from '../models/settings';
+import { PluginSettings, NoteNamingOption } from '../models/settings';
 import { NotificationService } from '../ui/notificationService';
 import { getParentFolderPath, sanitizeFilename, getFormattedDate } from '../utils/fileUtils';
+
+// Helper function to remove markdown headings and links from the start of a string
+function stripMarkdown(text: string): string {
+    // Remove leading # style headings (e.g., # heading, ## heading)
+    let cleaned = text.replace(/^[#]+\s+/, '');
+    // Remove markdown links (e.g., [link text](url))
+    // This is a basic version, might need refinement for complex cases
+    cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+    // Add more replacements here if needed (e.g., bold, italics)
+    return cleaned.trim(); 
+}
 
 export class NoteCreator {
     constructor(
@@ -24,7 +35,7 @@ export class NoteCreator {
             const uniqueNotePath = await this._findUniqueNotePath(folderPath, title);
 
             // Generate markdown link relative to the vault root
-            const imageLink = this.app.fileManager.generateMarkdownLink(imageFile, '/'); 
+            const imageLink = this.app.fileManager.generateMarkdownLink(imageFile, '/');
             const noteContent = `${transcription.trim()}\n\n${imageLink}`;
 
             const newNoteFile = await this.app.vault.create(uniqueNotePath, noteContent);
@@ -43,32 +54,42 @@ export class NoteCreator {
      * Uses the final image file for naming context.
      */
     private _generateNoteTitle(transcription: string, imageFile: TFile): string {
-        let title = '';
+        let titleBase = '';
+        const date = getFormattedDate();
+        const sanitizedImageName = sanitizeFilename(imageFile.basename);
 
-        if (this.settings.useFirstLineAsTitle) {
-            const firstLine = transcription.trim().split('\n')[0];
-            if (firstLine) {
-                title = sanitizeFilename(firstLine);
-            } else {
-                // Fallback if transcription is empty or just whitespace
-                title = `Transcription for ${imageFile.basename}`;
-            }
-        } else {
-            // Use the original parent path logic for folder name if available in settings (or job? - simpler to keep using imageFile path for now)
-            // Let's keep using the moved image's parent folder for title generation for now
-            // as the user might expect the title to reflect the final image location
-            // const parentFolder = getParentFolderPath(imageFile.path); // This would use the '/Images' subfolder
-            // OR use job.originalParentPath? Needs consideration if setting is added
-            const parentFolder = getParentFolderPath(imageFile.path); // Keep using image's current folder for title part
-            const folderName = parentFolder === '/' ? 'Root' : parentFolder.split('/').pop() || 'Folder'; 
-            const date = getFormattedDate();
-            const sanitizedImageName = sanitizeFilename(imageFile.basename);
-            title = `${folderName}_${date}_${sanitizedImageName}`;
+        switch (this.settings.noteNamingOption) {
+            case NoteNamingOption.FirstLine:
+                const firstLine = transcription.trim().split('\n')[0];
+                if (firstLine) {
+                    // Strip markdown before sanitizing
+                    titleBase = sanitizeFilename(stripMarkdown(firstLine));
+                } else {
+                    // Fallback if transcription is empty or just whitespace
+                    titleBase = `Transcription for ${sanitizedImageName}`;
+                }
+                break;
+
+            case NoteNamingOption.ImageName:
+                titleBase = sanitizedImageName;
+                break;
+
+            case NoteNamingOption.DateImageName:
+                titleBase = `${date}_${sanitizedImageName}`;
+                break;
+
+            case NoteNamingOption.FolderDateNum: // Keep this option as is for now
+            default:
+                // Use the original parent path logic
+                const parentFolder = getParentFolderPath(imageFile.path);
+                const folderName = parentFolder === '/' ? 'Root' : parentFolder.split('/').pop() || 'Folder';
+                titleBase = `${folderName}_${date}_${sanitizedImageName}`;
+                break;
         }
-        
+
         // Ensure title isn't overly long (optional)
         const MAX_TITLE_LENGTH = 100;
-        return title.substring(0, MAX_TITLE_LENGTH);
+        return titleBase.substring(0, MAX_TITLE_LENGTH);
     }
 
     /**
@@ -76,11 +97,13 @@ export class NoteCreator {
      */
     private async _findUniqueNotePath(folderPath: string, title: string): Promise<string> {
         let counter = 0;
-        let uniquePath = normalizePath(`${folderPath}/${title}.md`);
+        // Ensure title is not empty before creating path
+        const validTitle = title || 'Untitled Note'; 
+        let uniquePath = normalizePath(`${folderPath}/${validTitle}.md`);
 
         while (await this.app.vault.adapter.exists(uniquePath)) {
             counter++;
-            uniquePath = normalizePath(`${folderPath}/${title}_${counter}.md`);
+            uniquePath = normalizePath(`${folderPath}/${validTitle}_${counter}.md`);
         }
         return uniquePath;
     }

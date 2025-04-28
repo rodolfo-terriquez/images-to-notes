@@ -19,7 +19,13 @@ export async function convertHeicToJpg(
     app: App, 
     notificationService: NotificationService
 ): Promise<TFile | null> {
-    console.log(`Attempting to convert HEIC file: ${heicFile.path}`);
+    // console.log(`Attempting to convert HEIC file: ${heicFile.path}`);
+    if (heicFile.extension.toLowerCase() !== 'heic') {
+        console.error('File provided to convertHeicToJpg is not a HEIC file:', heicFile.path);
+        notificationService.notifyError(`Conversion failed: ${heicFile.name} is not a HEIC file.`);
+        return null;
+    }
+
     try {
         const arrayBuffer = await app.vault.readBinary(heicFile);
         const blob = new Blob([arrayBuffer], { type: 'image/heic' });
@@ -41,7 +47,7 @@ export async function convertHeicToJpg(
         const newFileName = `${heicFile.basename}.jpg`;
         const newFilePath = normalizePath(`${parentPath}/${newFileName}`);
 
-        console.log(`Creating new JPG file at: ${newFilePath}`);
+        // console.log(`Creating new JPG file at: ${newFilePath}`);
 
         const existingFile = app.vault.getAbstractFileByPath(newFilePath);
         if (existingFile && existingFile instanceof TFile) {
@@ -50,7 +56,7 @@ export async function convertHeicToJpg(
 
         const newFile = await app.vault.createBinary(newFilePath, jpgArrayBuffer);
         notificationService.notifyVerbose(`Converted ${heicFile.name} to ${newFile.name}`);
-        console.log(`Successfully converted HEIC to JPG: ${newFile.path}`);
+        // console.log(`Successfully converted HEIC to JPG: ${newFile.path}`);
         return newFile;
 
     } catch (error) {
@@ -81,32 +87,27 @@ export async function compressImage(
 ): Promise<TFile | null> {
     const compressibleExtensions = ['jpg', 'jpeg', 'png'];
     if (!compressibleExtensions.includes(imageFile.extension.toLowerCase())) {
-        console.log(`Skipping compression for non-compressible file type: ${imageFile.path}`);
+        // console.log(`Skipping compression for non-compressible file type: ${imageFile.path}`);
         return imageFile;
     }
 
-    console.log(`Attempting to compress image: ${imageFile.path}`);
+    // console.log(`Attempting to compress image: ${imageFile.path}`);
     try {
         const arrayBuffer = await app.vault.readBinary(imageFile);
-        const blob = new Blob([arrayBuffer], { type: `image/${imageFile.extension === 'jpg' ? 'jpeg' : imageFile.extension}` });
-        const file = new File([blob], imageFile.name, { type: blob.type });
+        const blob = new Blob([arrayBuffer], { type: `image/${imageFile.extension}` });
+        const file = new File([blob], imageFile.name, { type: blob.type }); // Create File object
+        // console.log(`Original file size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
 
-        console.log(`Original file size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
+        const compressedFile = await imageCompression(file, options); // Pass the File object
+        // console.log(`Compressed file size: ${(compressedFile.size / 1024 / 1024).toFixed(2)} MB`);
 
-        const compressedFile = await imageCompression(file, options);
-
-        console.log(`Compressed file size: ${(compressedFile.size / 1024 / 1024).toFixed(2)} MB`);
-
-        if (compressedFile.size < file.size * 0.95) {
-            const compressedArrayBuffer = await compressedFile.arrayBuffer();
-            await app.vault.modifyBinary(imageFile, compressedArrayBuffer);
-            notificationService.notifyVerbose(`Compressed ${imageFile.name}`);
-            console.log(`Successfully compressed image and updated file: ${imageFile.path}`);
+        if (compressedFile.size < file.size) { // Compare File sizes
+            const compressedBuffer = await compressedFile.arrayBuffer();
+            await app.vault.modifyBinary(imageFile, compressedBuffer);
+            // console.log(`Successfully compressed image and updated file: ${imageFile.path}`);
         } else {
-            console.log(`Compression did not significantly reduce file size. Skipping overwrite for: ${imageFile.path}`);
-            notificationService.notifyVerbose(`Compression skipped for ${imageFile.name} (no significant size reduction)`);
+            // console.log(`Compression did not significantly reduce file size. Skipping overwrite for: ${imageFile.path}`);
         }
-
         return imageFile;
 
     } catch (error) {

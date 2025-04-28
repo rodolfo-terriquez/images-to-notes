@@ -4,11 +4,12 @@ import { TranscriptionJob, TranscriptionStatus } from '../models/transcriptionJo
 export class TranscriptionQueue {
     private queue: TranscriptionJob[] = [];
     private isProcessing: boolean = false;
+    private processing: TranscriptionJob | null = null;
 
     // The actual processing logic is now injected via setProcessCallback
     private processCallback: (job: TranscriptionJob) => Promise<void> = async () => {
         // This should never be called if setProcessCallback is used correctly
-        console.error('TranscriptionQueue: processCallback was not set!');
+        // console.error('TranscriptionQueue: processCallback was not set!');
         // Optionally throw an error or handle it gracefully
         // throw new Error("Process callback not set");
     };
@@ -24,10 +25,9 @@ export class TranscriptionQueue {
      * @param originalParentPath The original folder path where the image was created.
      */
     addToQueue(file: TFile, originalParentPath: string) {
-        // Avoid adding duplicates if the file is already pending or processing
-        const exists = this.queue.some(job => job.file.path === file.path && (job.status === 'pending' || job.status === 'processing'));
-        if (exists) {
-            console.log(`Job for ${file.path} already in queue.`);
+        // Basic check for duplicates
+        if (this.queue.some(job => job.file.path === file.path) || this.processing?.file.path === file.path) {
+            // console.log(`Job for ${file.path} already in queue.`);
             return;
         }
 
@@ -37,7 +37,7 @@ export class TranscriptionQueue {
             status: 'pending',
         };
         this.queue.push(newJob);
-        console.log(`Added ${file.path} to queue. Queue size: ${this.queue.length}`);
+        // console.log(`Added ${file.path} to queue. Queue size: ${this.queue.length}`);
         this.triggerProcessing();
     }
 
@@ -46,7 +46,7 @@ export class TranscriptionQueue {
      */
     private triggerProcessing() {
         if (this.isProcessing) {
-            console.log('Already processing, skipping trigger.');
+            // console.log('Already processing, skipping trigger.');
             return;
         }
         this.processNext();
@@ -63,14 +63,15 @@ export class TranscriptionQueue {
         const nextJob = this.queue.find(job => job.status === 'pending');
 
         if (!nextJob) {
-            console.log('No pending jobs in queue.');
+            // console.log('No pending jobs in queue.');
             this.isProcessing = false;
             return; // No pending jobs
         }
 
         this.isProcessing = true;
+        this.processing = nextJob;
         nextJob.status = 'processing';
-        console.log(`Processing job for ${nextJob.file.path}`);
+        // console.log(`Processing job for ${nextJob.file.path}`);
 
         try {
             // Call the actual processing function (AI transcription)
@@ -80,14 +81,12 @@ export class TranscriptionQueue {
             console.error(`Error processing job for ${nextJob.file.path}:`, error);
             this.markAsError(nextJob, error instanceof Error ? error.message : String(error));
         } finally {
-            // Remove the processed job from the queue for simplicity 
-            // (Alternative: keep history with done/error status)
-            this.queue = this.queue.filter(job => job.file.path !== nextJob.file.path || (job.status !== 'done' && job.status !== 'error'));
-            
+            // Regardless of success or error, clean up
+            this.processing = null;
             this.isProcessing = false;
-            console.log(`Finished processing job for ${nextJob.file.path}. Queue size: ${this.queue.length}`);
+            // console.log(`Finished processing job for ${nextJob.file.path}. Queue size: ${this.queue.length}`);
             // Check if there are more jobs to process
-            this.processNext(); 
+            this.processNext(); // Recursively call to process next item
         }
     }
 
@@ -97,8 +96,8 @@ export class TranscriptionQueue {
      */
     markAsDone(job: TranscriptionJob) {
         job.status = 'done';
-        console.log(`Job for ${job.file.path} marked as done.`);
-        // Optionally: keep the job in the queue with status 'done' or remove it
+        // console.log(`Job for ${job.file.path} marked as done.`);
+        // Job will be removed in the finally block of processNext
     }
 
     /**
@@ -109,8 +108,8 @@ export class TranscriptionQueue {
     markAsError(job: TranscriptionJob, errorMessage: string) {
         job.status = 'error';
         job.error = errorMessage;
-        console.log(`Job for ${job.file.path} marked as error: ${errorMessage}`);
-        // Optionally: keep the job in the queue with status 'error' or remove it
+        // console.log(`Job for ${job.file.path} marked as error: ${errorMessage}`);
+        // Job will be removed in the finally block of processNext
     }
 
     // Optional: Methods for persisting/restoring queue state could be added here

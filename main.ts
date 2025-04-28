@@ -1,5 +1,5 @@
 import { Plugin, TAbstractFile, TFile, normalizePath, Editor, MarkdownView, MarkdownFileInfo, Workspace } from 'obsidian';
-import { PluginSettings, DEFAULT_SETTINGS } from 'models/settings';
+import { PluginSettings, DEFAULT_SETTINGS, NoteNamingOption } from 'models/settings';
 import { TranscriptionSettingTab } from 'ui/settingsTab';
 import { ProcessingQueue } from './services/processingQueue';
 import { isImageFile, getParentFolderPath } from './utils/fileUtils';
@@ -20,7 +20,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 	private processingPaths = new Set<string>();
 
 	async onload() {
-		console.log('Loading Notes to Markdown Plugin');
+		// console.log('Loading Notes to Markdown Plugin');
 		await this.loadSettings();
 
 		this.notificationService = new NotificationService(this.settings);
@@ -34,7 +34,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 
 		// Defer the 'create' event registration until the layout is ready
 		this.app.workspace.onLayoutReady(() => {
-			console.log('Workspace layout ready. Registering vault "create" event listener.');
+			// console.log('Workspace layout ready. Registering vault "create" event listener.');
 			this.isReady = true; // Can set readiness flag here if still needed elsewhere
 			this.registerEvent(
 				this.app.vault.on('create', this.handleFileCreate.bind(this))
@@ -46,22 +46,51 @@ export default class ImageTranscriberPlugin extends Plugin {
 			this.app.workspace.on('editor-drop', this.handleEditorDrop.bind(this))
 		);
 
-		console.log('Notes to Markdown Plugin loaded. File watcher registration deferred until layout ready.');
+		// console.log('Notes to Markdown Plugin loaded. File watcher registration deferred until layout ready.');
 	}
 
 	onunload() {
-		console.log('Unloading Notes to Markdown Plugin');
+		// console.log('Unloading Notes to Markdown Plugin');
 		// Cleanup logic: The registerEvent method handles unregistering the vault event.
 		// Queue processing might need explicit stopping if it involves long operations.
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        // Load saved data, potentially containing outdated settings format
+        const loadedData = await this.loadData();
+
+        // Start with default settings
+        this.settings = { ...DEFAULT_SETTINGS };
+
+        // Merge loaded data onto defaults
+        if (loadedData) {
+            this.settings = Object.assign(this.settings, loadedData);
+
+            // --- Settings Migration --- 
+            // Check if the old setting exists and the new one doesn't
+            // The `as any` is used here to access a potentially deprecated property
+            const oldSettingValue = (loadedData as any).useFirstLineAsTitle;
+            if (typeof oldSettingValue === 'boolean' && !loadedData.noteNamingOption) {
+                // console.log('Migrating old note naming setting...');
+                this.settings.noteNamingOption = oldSettingValue 
+                    ? NoteNamingOption.FirstLine 
+                    : NoteNamingOption.FolderDateNum; // Or choose a different default like ImageName if preferred for migration
+                
+                // Optionally remove the old setting from the object to keep data clean
+                // delete (this.settings as any).useFirstLineAsTitle; 
+                // Decided against deleting for now, Object.assign will overwrite anyway if we save later
+            }
+            // --- End Settings Migration ---
+        }
+
 		// Ensure processedImagePaths is always an array, even if saved data is corrupted/missing
 		if (!this.settings.processedImagePaths || !Array.isArray(this.settings.processedImagePaths)) {
-			console.warn('Processed image paths missing or invalid in settings data. Initializing as empty array.');
+			// console.warn('Processed image paths missing or invalid in settings data. Initializing as empty array.');
 			this.settings.processedImagePaths = [];
 		}
+        
+        // Save settings *after* potential migration to ensure the new format is stored
+        await this.saveSettings();
 	}
 
 	async saveSettings() {
@@ -72,20 +101,20 @@ export default class ImageTranscriberPlugin extends Plugin {
 		// --- Initial Checks ---
 		// 1. Check if this file path was flagged as dropped in the editor
 		if (file instanceof TFile && this.droppedInEditorPaths.has(file.path)) {
-			console.log(`Skipping transcription for image dropped in editor: ${file.path}`);
+			// console.log(`Skipping transcription for image dropped in editor: ${file.path}`);
 			this.droppedInEditorPaths.delete(file.path); // Clean up the flag
 			return;
 		}
 
 		// 3. Ignore non-image files or folders early on
 		if (!(file instanceof TFile && isImageFile(file))) {
-			console.log(`Ignoring non-image file or folder: ${file.path}`);
+			// console.log(`Ignoring non-image file or folder: ${file.path}`);
 			return;
 		}
 
 		// 4. Check if this path is already being added to the queue (brief lock)
 		if (this.processingPaths.has(file.path)) {
-			console.log(`Initial path already being added to queue, skipping: ${file.path}`);
+			// console.log(`Initial path already being added to queue, skipping: ${file.path}`);
 			return;
 		}
 		// --- End Initial Checks ---
@@ -94,7 +123,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 		this.processingPaths.add(file.path);
 
 		try {
-			console.log(`Adding initial file to processing queue: ${file.path}`);
+			// console.log(`Adding initial file to processing queue: ${file.path}`);
 			// Add the initial TFile object to the queue
 			this.processingQueue.addToQueue(file);
 		} catch (error) {
@@ -102,7 +131,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 		} finally {
 			// Remove from the temporary lock set once added (or if error occurs)
 			if (this.processingPaths.delete(file.path)) {
-				console.log(`Finished adding lock for: ${file.path}`);
+				// console.log(`Finished adding lock for: ${file.path}`);
 			}
 		}
 	}
@@ -149,7 +178,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 
 			// 4. Check if Already Processed (using final path)
 			if (this.isAlreadyProcessed(finalPath)) {
-				console.log(`Image already processed (based on final path), skipping transcription: ${finalPath}`);
+				// console.log(`Image already processed (based on final path), skipping transcription: ${finalPath}`);
 				this.processingQueue.markAsDone(job); // Mark as done, even though skipped
 				return;
 			}
@@ -183,10 +212,10 @@ export default class ImageTranscriberPlugin extends Plugin {
 	 */
 	private async handleHeicConversion(file: TFile): Promise<TFile | null> {
 		if (file.extension.toLowerCase() === 'heic') {
-			console.log(`HEIC file detected, attempting conversion: ${file.path}`);
+			// console.log(`HEIC file detected, attempting conversion: ${file.path}`);
 			const convertedFile = await convertHeicToJpg(file, this.app, this.notificationService);
 			if (convertedFile) {
-				console.log(`HEIC converted successfully to: ${convertedFile.path}`);
+				// console.log(`HEIC converted successfully to: ${convertedFile.path}`);
 				return convertedFile; // Use the converted JPG file
 			} else {
 				console.error(`HEIC conversion failed for: ${file.path}.`);
@@ -204,7 +233,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 		try {
 			const resultFile = await compressImage(file, this.app, this.notificationService);
 			if (resultFile && resultFile.path === file.path) {
-				console.log(`Compression step completed (or skipped) for: ${file.path}`);
+				// console.log(`Compression step completed (or skipped) for: ${file.path}`);
 			} else if (!resultFile) {
 				console.error(`Compression utility unexpectedly returned null for: ${file.path}`);
 			}
@@ -233,22 +262,22 @@ export default class ImageTranscriberPlugin extends Plugin {
 		const lastSegment = pathSegments[pathSegments.length - 1];
 
 		if (lastSegment === imageFolderName) {
-			console.log(`Image already in an '${imageFolderName}' folder: ${currentParentPath}`);
+			// console.log(`Image already in an '${imageFolderName}' folder: ${currentParentPath}`);
 			imagesFolderPath = currentParentPath;
 			newImagePath = fileToMove.path; // Path remains the same
 			shouldMoveFile = false;
 			noteTargetParentPath = getParentFolderPath(currentParentPath); // Note goes one level up
-			console.log(`Note will be created in: ${noteTargetParentPath}`);
+			// console.log(`Note will be created in: ${noteTargetParentPath}`);
 		}
 
 		try {
 			// Ensure the target folder exists (create only if moving)
 			if (shouldMoveFile) {
 				if (!await this.app.vault.adapter.exists(imagesFolderPath)) {
-					console.log(`Creating '${imageFolderName}' folder at: ${imagesFolderPath}`);
+					// console.log(`Creating '${imageFolderName}' folder at: ${imagesFolderPath}`);
 					await this.app.vault.createFolder(imagesFolderPath);
 				} else {
-					console.log(`Target folder '${imagesFolderPath}' already exists.`);
+					// console.log(`Target folder '${imagesFolderPath}' already exists.`);
 				}
 				// Recalculate newImagePath in case folder name was normalized or changed
 				newImagePath = normalizePath(`${imagesFolderPath}/${fileToMove.name}`);
@@ -270,14 +299,14 @@ export default class ImageTranscriberPlugin extends Plugin {
 
 			// Move the file only if necessary and paths are different
 			if (shouldMoveFile && fileToMove.path !== newImagePath) {
-				console.log(`Moving image from ${fileToMove.path} to: ${newImagePath}`);
+				// console.log(`Moving image from ${fileToMove.path} to: ${newImagePath}`);
 				await this.app.fileManager.renameFile(fileToMove, newImagePath);
 				// The fileToMove object's path is updated by renameFile
-				console.log(`Successfully moved image to: ${fileToMove.path}`);
+				// console.log(`Successfully moved image to: ${fileToMove.path}`);
 				// Return the *updated* path from the file object after rename
 				return { finalPath: fileToMove.path, noteTargetParentPath: noteTargetParentPath };
 			} else {
-				console.log(`Image does not need to be moved. Current path: ${fileToMove.path}`);
+				// console.log(`Image does not need to be moved. Current path: ${fileToMove.path}`);
 				// Return the original path as the final path
 				return { finalPath: fileToMove.path, noteTargetParentPath: noteTargetParentPath };
 			}
@@ -296,8 +325,8 @@ export default class ImageTranscriberPlugin extends Plugin {
 	 * @returns True if the path is in the processed list, false otherwise.
 	 */
 	private isAlreadyProcessed(filePath: string): boolean {
-		console.log(`Checking processed paths for final path: ${filePath}`);
-		console.log(`Current processed paths: ${JSON.stringify(this.settings.processedImagePaths)}`);
+		// console.log(`Checking processed paths for final path: ${filePath}`);
+		// console.log(`Current processed paths: ${JSON.stringify(this.settings.processedImagePaths)}`);
 		return this.settings.processedImagePaths.includes(filePath);
 	}
 
@@ -344,13 +373,13 @@ export default class ImageTranscriberPlugin extends Plugin {
 	 */
 	private async markAsProcessed(filePath: string): Promise<void> {
 		try {
-			console.log(`Attempting to mark as processed and save: ${filePath}`);
+			// console.log(`Attempting to mark as processed and save: ${filePath}`);
 			if (!this.settings.processedImagePaths.includes(filePath)) {
 				this.settings.processedImagePaths.push(filePath);
 				await this.saveSettings(); // Persist the change
-				console.log(`Successfully saved processed path: ${filePath}. New list: ${JSON.stringify(this.settings.processedImagePaths)}`);
+				// console.log(`Successfully saved processed path: ${filePath}. New list: ${JSON.stringify(this.settings.processedImagePaths)}`);
 			} else {
-				console.log(`Path ${filePath} was already in the processed list.`);
+				// console.log(`Path ${filePath} was already in the processed list.`);
 			}
 		} catch (error) {
 			console.error(`Failed to save processed path ${filePath}:`, error);
@@ -364,41 +393,41 @@ export default class ImageTranscriberPlugin extends Plugin {
 	 * We want to prevent transcription for these images as Obsidian handles them.
 	 */
 	private async handleEditorDrop(evt: DragEvent, editor: Editor, info: MarkdownView | MarkdownFileInfo): Promise<void> {
-		console.log('Editor drop event detected.');
+		// console.log('Editor drop event detected.');
 		if (!evt.dataTransfer) {
-			console.log('No dataTransfer object found on event.');
+			// console.log('No dataTransfer object found on event.');
 			return;
 		}
 
 		const files = evt.dataTransfer.files;
 		if (files.length === 0) {
-			console.log('No files found in dataTransfer.');
+			// console.log('No files found in dataTransfer.');
 			return;
 		}
 
 		const sourcePath = info.file?.path; // Path of the note where the drop occurred
-		console.log(`Drop occurred in file: ${sourcePath || 'unknown'}`);
+		// console.log(`Drop occurred in file: ${sourcePath || 'unknown'}`);
 
 		for (let i = 0; i < files.length; i++) {
 			const file = files[i];
 			// Basic check for image MIME type or extension - refine if needed
 			if (file.type.startsWith('image/')) {
-				console.log(`Image file detected in editor drop: ${file.name} (Type: ${file.type})`);
+				// console.log(`Image file detected in editor drop: ${file.name} (Type: ${file.type})`);
 				// Determine where Obsidian *will* save this file
 				try {
 					// Await the asynchronous function call
 					const destinationPath = await this.app.fileManager.getAvailablePathForAttachment(file.name, sourcePath);
-					console.log(`Anticipated path for ${file.name}: ${destinationPath}`);
+					// console.log(`Anticipated path for ${file.name}: ${destinationPath}`);
 
 					if (destinationPath) {
 						this.droppedInEditorPaths.add(destinationPath);
-						console.log(`Added to droppedInEditorPaths: ${destinationPath}`);
+						// console.log(`Added to droppedInEditorPaths: ${destinationPath}`);
 
 						// Cleanup mechanism: Remove the path after a short delay
 						// This handles cases where the 'create' event might not fire or be missed
 						setTimeout(() => {
 							if (this.droppedInEditorPaths.delete(destinationPath)) {
-								console.log(`Cleaned up droppedInEditorPaths: ${destinationPath}`);
+								// console.log(`Cleaned up droppedInEditorPaths: ${destinationPath}`);
 							}
 						}, 1500); // 1.5 second delay
 					}
@@ -406,7 +435,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 					console.error(`Error determining attachment path for ${file.name}:`, error);
 				}
 			} else {
-				console.log(`Non-image file dropped in editor: ${file.name}`);
+				// console.log(`Non-image file dropped in editor: ${file.name}`);
 			}
 		}
 	}
