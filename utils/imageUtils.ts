@@ -1,8 +1,9 @@
-import { App, TFile, Notice, normalizePath } from 'obsidian';
+import { App, TFile, normalizePath } from 'obsidian';
 // @ts-ignore - heic2any doesn't have readily available types
 import heic2any from 'heic2any';
 import imageCompression from 'browser-image-compression';
 import { getParentFolderPath } from './fileUtils';
+import { NotificationService } from '../ui/notificationService';
 
 /**
  * Converts a HEIC file to JPG format using the heic2any library.
@@ -10,9 +11,14 @@ import { getParentFolderPath } from './fileUtils';
  *
  * @param heicFile The HEIC file (TFile) to convert.
  * @param app The Obsidian App instance.
+ * @param notificationService Service for displaying notifications.
  * @returns A promise that resolves with the TFile object for the new JPG file, or null if conversion fails.
  */
-export async function convertHeicToJpg(heicFile: TFile, app: App): Promise<TFile | null> {
+export async function convertHeicToJpg(
+    heicFile: TFile, 
+    app: App, 
+    notificationService: NotificationService
+): Promise<TFile | null> {
     console.log(`Attempting to convert HEIC file: ${heicFile.path}`);
     try {
         const arrayBuffer = await app.vault.readBinary(heicFile);
@@ -43,13 +49,13 @@ export async function convertHeicToJpg(heicFile: TFile, app: App): Promise<TFile
         }
 
         const newFile = await app.vault.createBinary(newFilePath, jpgArrayBuffer);
-        new Notice(`Converted ${heicFile.name} to ${newFile.name}`);
+        notificationService.notifyVerbose(`Converted ${heicFile.name} to ${newFile.name}`);
         console.log(`Successfully converted HEIC to JPG: ${newFile.path}`);
         return newFile;
 
     } catch (error) {
         console.error(`Error converting HEIC file ${heicFile.path}:`, error);
-        new Notice(`Failed to convert HEIC file: ${heicFile.name}. See console for details.`);
+        notificationService.notifyError(`Failed to convert HEIC file: ${heicFile.name}. See console for details.`);
         return null;
     }
 }
@@ -59,12 +65,14 @@ export async function convertHeicToJpg(heicFile: TFile, app: App): Promise<TFile
  *
  * @param imageFile The image file (TFile) to compress.
  * @param app The Obsidian App instance.
+ * @param notificationService Service for displaying notifications.
  * @param options Optional compression options (e.g., maxSizeMB, maxWidthOrHeight).
  * @returns A promise that resolves with the TFile object (now compressed), or the original TFile if compression fails or isn't significant.
  */
 export async function compressImage(
     imageFile: TFile,
     app: App,
+    notificationService: NotificationService,
     options: any = { // Use 'any' for options type for now
         maxSizeMB: 1,
         maxWidthOrHeight: 1920,
@@ -92,18 +100,18 @@ export async function compressImage(
         if (compressedFile.size < file.size * 0.95) {
             const compressedArrayBuffer = await compressedFile.arrayBuffer();
             await app.vault.modifyBinary(imageFile, compressedArrayBuffer);
-            new Notice(`Compressed ${imageFile.name}`);
+            notificationService.notifyVerbose(`Compressed ${imageFile.name}`);
             console.log(`Successfully compressed image and updated file: ${imageFile.path}`);
         } else {
             console.log(`Compression did not significantly reduce file size. Skipping overwrite for: ${imageFile.path}`);
-            new Notice(`Compression skipped for ${imageFile.name} (no significant size reduction)`);
+            notificationService.notifyVerbose(`Compression skipped for ${imageFile.name} (no significant size reduction)`);
         }
 
         return imageFile;
 
     } catch (error) {
         console.error(`Error compressing image ${imageFile.path}:`, error);
-        new Notice(`Failed to compress image: ${imageFile.name}. See console for details.`);
+        notificationService.notifyError(`Failed to compress image: ${imageFile.name}. See console for details.`);
         return imageFile;
     }
 }

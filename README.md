@@ -7,7 +7,7 @@ It supports images in the following formats: .jpg, .jpeg, .png, and .heic
 ## How it Works
 
 1.  Install and enable the plugin.
-2.  Configure the settings (API provider, API key, model).
+2.  Configure the settings (API provider, API key, model). I recommend using GPT-4.1 Mini for its low cost and high accuracy.
 3.  Add an image file (by dragging it into a folder in the Obsidian file explorer pane).
 4.  The plugin will automatically transcribe your image into a markdown file and add the image to the file.
 

@@ -24,6 +24,7 @@ export interface PluginSettings {
     useFirstLineAsTitle: boolean; // Simplified to boolean based on NoteNamingOption
     imageFolderName: string; // Added setting for the image folder name
     processedImagePaths: string[]; // Added to track processed images
+    verboseNotifications: boolean;
     // Add any other settings identified in PRD Section 4.3 if available
 }
 
@@ -38,4 +39,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     useFirstLineAsTitle: false, // Default to FolderDateNum naming
     imageFolderName: 'Images', // Default image folder name (Task 18.2)
     processedImagePaths: [], // Initialize as empty array
+    verboseNotifications: false,
 }; 

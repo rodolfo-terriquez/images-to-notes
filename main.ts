@@ -23,7 +23,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 		console.log('Loading Image Transcriber Plugin');
 		await this.loadSettings();
 
-		this.notificationService = new NotificationService();
+		this.notificationService = new NotificationService(this.settings);
 		this.aiService = new AIService(this.settings, this.notificationService, this.app);
 		this.noteCreator = new NoteCreator(this.settings, this.notificationService, this.app);
 		this.processingQueue = new ProcessingQueue();
@@ -32,22 +32,21 @@ export default class ImageTranscriberPlugin extends Plugin {
 
 		this.addSettingTab(new TranscriptionSettingTab(this.app, this));
 
-		this.registerEvent(
-			this.app.vault.on('create', this.handleFileCreate.bind(this))
-		);
+		// Defer the 'create' event registration until the layout is ready
+		this.app.workspace.onLayoutReady(() => {
+			console.log('Workspace layout ready. Registering vault "create" event listener.');
+			this.isReady = true; // Can set readiness flag here if still needed elsewhere
+			this.registerEvent(
+				this.app.vault.on('create', this.handleFileCreate.bind(this))
+			);
+		});
 
-		// Listen for drops onto the editor
+		// Listen for drops onto the editor - register immediately
 		this.registerEvent(
 			this.app.workspace.on('editor-drop', this.handleEditorDrop.bind(this))
 		);
 
-		// Delay setting the ready flag to ignore initial file scan events
-		setTimeout(() => {
-			this.isReady = true;
-			console.log('Image Transcriber Plugin initialization complete. Ready for new images.');
-		}, 2000); // 2-second delay (adjust if needed)
-
-		console.log('Image Transcriber Plugin loaded. File watcher active, but delayed start for processing.');
+		console.log('Image Transcriber Plugin loaded. File watcher registration deferred until layout ready.');
 	}
 
 	onunload() {
@@ -75,12 +74,6 @@ export default class ImageTranscriberPlugin extends Plugin {
 		if (file instanceof TFile && this.droppedInEditorPaths.has(file.path)) {
 			console.log(`Skipping transcription for image dropped in editor: ${file.path}`);
 			this.droppedInEditorPaths.delete(file.path); // Clean up the flag
-			return;
-		}
-
-		// 2. Ignore events if the plugin hasn't finished its delayed initialization
-		if (!this.isReady) {
-			console.log(`Plugin not ready, ignoring create event for: ${file.path}`);
 			return;
 		}
 
@@ -115,160 +108,254 @@ export default class ImageTranscriberPlugin extends Plugin {
 	}
 
 	/**
-	 * Processes a single image file job sequentially.
-	 * This method handles HEIC conversion, compression, moving, checking processed state,
-	 * calling transcription, creating the note, and saving the processed state.
-	 * This method is passed as a callback to the ProcessingQueue.
+	 * Processes a single image file job sequentially. Orchestrates the different steps.
 	 * @param job The processing job containing the initial file reference.
 	 */
 	private async processImageFile(job: ProcessingJob): Promise<void> {
 		const initialFile = job.initialFile;
-		let fileToProcess: TFile = initialFile; // Start with the initial file reference
-		let finalProcessedPath: string | null = null; // Keep track of the final path after potential move
+		let fileToProcess: TFile | null = initialFile;
 
 		try {
 			this.notificationService.notifyInfo(`Processing ${initialFile.name}...`);
 
-			// 1. --- HEIC Conversion Step ---
-			if (initialFile.extension.toLowerCase() === 'heic') {
-				console.log(`HEIC file detected, attempting conversion: ${initialFile.path}`);
-				const convertedFile = await convertHeicToJpg(initialFile, this.app);
-				if (convertedFile) {
-					console.log(`HEIC converted successfully to: ${convertedFile.path}`);
-					fileToProcess = convertedFile; // Use the converted JPG file for subsequent steps
-				} else {
-					console.error(`HEIC conversion failed for: ${initialFile.path}. Skipping transcription.`);
-					this.processingQueue.markAsError(job, 'HEIC conversion failed');
-					return; // Stop processing this job
-				}
+			// 1. HEIC Conversion
+			fileToProcess = await this.handleHeicConversion(fileToProcess);
+			if (!fileToProcess) {
+				this.processingQueue.markAsError(job, 'HEIC conversion failed');
+				return; // Stop processing this job
 			}
 
-			// 2. --- Image Compression Step ---
-			// Pass the potentially converted file (`fileToProcess`) to the compression function.
-			const compressedFile = await compressImage(fileToProcess, this.app);
-			if (compressedFile) {
-				console.log(`Compression step completed for: ${fileToProcess.path}`);
-			} else {
-				console.warn(`Compression failed for: ${fileToProcess.path}. Proceeding with uncompressed file.`);
-			}
+			// 2. Image Compression
+			await this.handleImageCompression(fileToProcess);
+			// Compression failure is logged but doesn't stop the process
 
-			// 3. --- File Moving Step ---
-			// Derive paths based on the current state of fileToProcess
-			const currentParentPath = getParentFolderPath(fileToProcess.path);
-			const imageFolderName = this.settings.imageFolderName || DEFAULT_SETTINGS.imageFolderName;
-			let noteTargetParentPath = currentParentPath;
-			let imagesFolderPath = normalizePath(`${currentParentPath}/${imageFolderName}`);
-			let newImagePath = normalizePath(`${imagesFolderPath}/${fileToProcess.name}`);
-			let shouldMoveFile = true;
-
-			// Check if dropped directly into an existing 'Images' folder
-			const pathSegments = currentParentPath.split('/');
-			const lastSegment = pathSegments[pathSegments.length - 1];
-
-			if (lastSegment === imageFolderName) {
-				console.log(`Image already in an '${imageFolderName}' folder: ${currentParentPath}`);
-				imagesFolderPath = currentParentPath;
-				newImagePath = fileToProcess.path;
-				shouldMoveFile = false;
-				noteTargetParentPath = getParentFolderPath(currentParentPath);
-				console.log(`Note will be created in: ${noteTargetParentPath}`);
-			}
-
-			// Perform the move if necessary
-			try {
-				// Ensure the target folder exists (create only if moving)
-				if (shouldMoveFile) {
-					if (!await this.app.vault.adapter.exists(imagesFolderPath)) {
-						console.log(`Creating '${imageFolderName}' folder at: ${imagesFolderPath}`);
-						await this.app.vault.createFolder(imagesFolderPath);
-					} else {
-						console.log(`Target folder '${imagesFolderPath}' already exists.`);
-					}
-				}
-
-				// Recalculate newImagePath just in case folder creation logic changed anything (unlikely but safe)
-				newImagePath = normalizePath(`${imagesFolderPath}/${fileToProcess.name}`);
-
-				// Check for existing file at the target path *before* moving
-				const existingImageInSubfolder = this.app.vault.getAbstractFileByPath(newImagePath);
-				if (existingImageInSubfolder && existingImageInSubfolder instanceof TFile && existingImageInSubfolder.path !== fileToProcess.path) {
-					const warnMsg = `Image named '${fileToProcess.name}' already exists in '${imagesFolderPath}'. Skipping transcription.`;
-					console.warn(warnMsg);
-					this.notificationService.notifyError(`Failed to process ${fileToProcess.name}: Duplicate name exists in '${imageFolderName}' folder.`);
-					this.processingQueue.markAsError(job, 'Duplicate image name in target folder');
-					return;
-				}
-
-				// Move the file only if necessary
-				if (shouldMoveFile && fileToProcess.path !== newImagePath) {
-					console.log(`Moving image from ${fileToProcess.path} to: ${newImagePath}`);
-					await this.app.fileManager.renameFile(fileToProcess, newImagePath);
-					// fileToProcess object path is updated by renameFile
-					console.log(`Successfully moved image to: ${fileToProcess.path}`);
-				} else {
-					console.log(`Image does not need to be moved. Current path: ${fileToProcess.path}`);
-				}
-
-				finalProcessedPath = fileToProcess.path; // Store the final path after move
-
-			} catch (moveError) {
-				const errorMsg = `Error during move/folder handling for ${fileToProcess.name} targeting '${imagesFolderPath}':`;
-				console.error(errorMsg, moveError);
-				this.notificationService.notifyError(`Failed to handle file operations for ${fileToProcess.name}. Skipping transcription.`);
-				this.processingQueue.markAsError(job, `File move/folder error: ${moveError instanceof Error ? moveError.message : String(moveError)}`);
+			// 3. File Moving & Path Handling
+			const moveResult = await this.handleFileMove(fileToProcess);
+			if (!moveResult) {
+				// Error logged within handleFileMove, mark job as error
+				this.processingQueue.markAsError(job, 'File move/folder handling failed');
 				return;
 			}
+			const { finalPath, noteTargetParentPath } = moveResult;
+			// fileToProcess reference might be updated by renameFile inside handleFileMove,
+			// but we primarily need the finalPath string now. Let's get the TFile reference for the final path.
+			const finalFileRef = this.app.vault.getAbstractFileByPath(finalPath);
+			if (!(finalFileRef instanceof TFile)) {
+				console.error(`Could not get TFile reference for final path: ${finalPath}`);
+				this.processingQueue.markAsError(job, 'Internal error: Could not get final file reference');
+				return;
+			}
+			fileToProcess = finalFileRef; // Update fileToProcess to the potentially moved file reference
 
-			// 4. --- Check if Already Processed ---
-			console.log(`Checking processed paths for final path: ${finalProcessedPath}`);
-			console.log(`Current processed paths: ${JSON.stringify(this.settings.processedImagePaths)}`);
-			if (finalProcessedPath && this.settings.processedImagePaths.includes(finalProcessedPath)) {
-				console.log(`Image already processed (based on final path), skipping transcription: ${finalProcessedPath}`);
+			// 4. Check if Already Processed (using final path)
+			if (this.isAlreadyProcessed(finalPath)) {
+				console.log(`Image already processed (based on final path), skipping transcription: ${finalPath}`);
 				this.processingQueue.markAsDone(job); // Mark as done, even though skipped
 				return;
 			}
 
-			if (!finalProcessedPath) {
-				console.error("Error: finalProcessedPath is not set before transcription attempt.");
-				this.processingQueue.markAsError(job, 'Internal error: Final path not determined');
+			// 5. Transcription & Note Creation
+			const transcriptionSuccess = await this.runTranscriptionAndCreateNote(fileToProcess, noteTargetParentPath);
+			if (!transcriptionSuccess) {
+				// Error logged within runTranscriptionAndCreateNote, mark job as error
+				this.processingQueue.markAsError(job, 'Transcription or Note creation failed');
 				return;
 			}
 
-			// 5. --- Transcription Step ---
-			this.notificationService.notifyInfo(`Starting transcription for ${fileToProcess.name}...`);
-			// Pass the final TFile object to the service
-			const transcription = await this.aiService.transcribeImage(fileToProcess);
-
-			if (transcription === null) {
-				// Error notification handled by AIService
-				this.processingQueue.markAsError(job, 'Transcription failed');
-				return;
-			}
-
-			// 6. --- Note Creation Step ---
-			this.notificationService.notifyInfo(`Transcription received for ${fileToProcess.name}. Creating note...`);
-			// Pass the necessary info to NoteCreator
-			const noteFile = await this.noteCreator.createNote(transcription, fileToProcess, noteTargetParentPath);
-
-			if (!noteFile) {
-				// Error notification handled by NoteCreator
-				this.processingQueue.markAsError(job, 'Note creation failed');
-				return;
-			}
-
-			// 7. --- Mark as Processed ---
-			console.log(`Attempting to mark as processed and save: ${finalProcessedPath}`);
-			this.settings.processedImagePaths.push(finalProcessedPath);
-			await this.saveSettings(); // Persist the change
-			console.log(`Successfully saved processed path: ${finalProcessedPath}. New list: ${JSON.stringify(this.settings.processedImagePaths)}`);
+			// 6. Mark as Processed & Save
+			await this.markAsProcessed(finalPath);
 
 			// Mark the job as done in the queue
 			this.processingQueue.markAsDone(job);
+			this.notificationService.notifyVerbose(`Successfully processed ${initialFile.name}.`);
 
 		} catch (error) {
 			console.error(`Unhandled error during processing job for ${initialFile.path}:`, error);
 			this.notificationService.notifyError(`Unexpected error processing ${initialFile.name}.`);
 			this.processingQueue.markAsError(job, `Unexpected processing error: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	/**
+	 * Handles HEIC to JPG conversion if necessary.
+	 * @param file The file to potentially convert.
+	 * @returns The TFile reference to use for subsequent steps (original or converted), or null on conversion failure.
+	 */
+	private async handleHeicConversion(file: TFile): Promise<TFile | null> {
+		if (file.extension.toLowerCase() === 'heic') {
+			console.log(`HEIC file detected, attempting conversion: ${file.path}`);
+			const convertedFile = await convertHeicToJpg(file, this.app, this.notificationService);
+			if (convertedFile) {
+				console.log(`HEIC converted successfully to: ${convertedFile.path}`);
+				return convertedFile; // Use the converted JPG file
+			} else {
+				console.error(`HEIC conversion failed for: ${file.path}.`);
+				return null; // Indicate failure
+			}
+		}
+		return file; // Return original file if not HEIC
+	}
+
+	/**
+	 * Handles image compression. Logs success or warning on failure.
+	 * @param file The file to compress.
+	 */
+	private async handleImageCompression(file: TFile): Promise<void> {
+		try {
+			const resultFile = await compressImage(file, this.app, this.notificationService);
+			if (resultFile && resultFile.path === file.path) {
+				console.log(`Compression step completed (or skipped) for: ${file.path}`);
+			} else if (!resultFile) {
+				console.error(`Compression utility unexpectedly returned null for: ${file.path}`);
+			}
+		} catch (compressionError) {
+			console.error(`Error during compression call for ${file.path}:`, compressionError);
+			this.notificationService.notifyError(`Compression failed for ${file.name} due to an unexpected error.`);
+		}
+	}
+
+	/**
+	 * Handles moving the file to the designated image folder, creating it if necessary,
+	 * and checking for duplicates.
+	 * @param fileToMove The file to potentially move (after conversion/compression).
+	 * @returns An object with the final path and the note target path, or null on failure.
+	 */
+	private async handleFileMove(fileToMove: TFile): Promise<{ finalPath: string; noteTargetParentPath: string } | null> {
+		const currentParentPath = getParentFolderPath(fileToMove.path);
+		const imageFolderName = this.settings.imageFolderName || DEFAULT_SETTINGS.imageFolderName;
+		let noteTargetParentPath = currentParentPath;
+		let imagesFolderPath = normalizePath(`${currentParentPath}/${imageFolderName}`);
+		let newImagePath = normalizePath(`${imagesFolderPath}/${fileToMove.name}`);
+		let shouldMoveFile = true;
+
+		// Check if dropped directly into an existing 'Images' folder
+		const pathSegments = currentParentPath.split('/');
+		const lastSegment = pathSegments[pathSegments.length - 1];
+
+		if (lastSegment === imageFolderName) {
+			console.log(`Image already in an '${imageFolderName}' folder: ${currentParentPath}`);
+			imagesFolderPath = currentParentPath;
+			newImagePath = fileToMove.path; // Path remains the same
+			shouldMoveFile = false;
+			noteTargetParentPath = getParentFolderPath(currentParentPath); // Note goes one level up
+			console.log(`Note will be created in: ${noteTargetParentPath}`);
+		}
+
+		try {
+			// Ensure the target folder exists (create only if moving)
+			if (shouldMoveFile) {
+				if (!await this.app.vault.adapter.exists(imagesFolderPath)) {
+					console.log(`Creating '${imageFolderName}' folder at: ${imagesFolderPath}`);
+					await this.app.vault.createFolder(imagesFolderPath);
+				} else {
+					console.log(`Target folder '${imagesFolderPath}' already exists.`);
+				}
+				// Recalculate newImagePath in case folder name was normalized or changed
+				newImagePath = normalizePath(`${imagesFolderPath}/${fileToMove.name}`);
+			}
+
+			// Check for existing file at the target path *before* moving/deciding not to move
+			// Important: Compare paths, not just names, to avoid self-comparison if not moving
+			if (newImagePath !== fileToMove.path) {
+				const existingImageInSubfolder = this.app.vault.getAbstractFileByPath(newImagePath);
+				if (existingImageInSubfolder && existingImageInSubfolder instanceof TFile) {
+					const warnMsg = `Image named '${fileToMove.name}' already exists in '${imagesFolderPath}'. Skipping transcription.`;
+					console.warn(warnMsg);
+					// Provide a more informative error message to the user
+					this.notificationService.notifyError(`Failed to process ${fileToMove.name}: A file with this name already exists in '${imageFolderName}'. The original file remains at ${fileToMove.path}.`);
+					return null; // Indicate failure
+				}
+			}
+
+
+			// Move the file only if necessary and paths are different
+			if (shouldMoveFile && fileToMove.path !== newImagePath) {
+				console.log(`Moving image from ${fileToMove.path} to: ${newImagePath}`);
+				await this.app.fileManager.renameFile(fileToMove, newImagePath);
+				// The fileToMove object's path is updated by renameFile
+				console.log(`Successfully moved image to: ${fileToMove.path}`);
+				// Return the *updated* path from the file object after rename
+				return { finalPath: fileToMove.path, noteTargetParentPath: noteTargetParentPath };
+			} else {
+				console.log(`Image does not need to be moved. Current path: ${fileToMove.path}`);
+				// Return the original path as the final path
+				return { finalPath: fileToMove.path, noteTargetParentPath: noteTargetParentPath };
+			}
+
+		} catch (moveError) {
+			const errorMsg = `Error during move/folder handling for ${fileToMove.name} targeting '${imagesFolderPath}':`;
+			console.error(errorMsg, moveError);
+			this.notificationService.notifyError(`Failed to handle file operations for ${fileToMove.name}. Skipping transcription.`);
+			return null; // Indicate failure
+		}
+	}
+
+	/**
+	 * Checks if a file path has already been processed.
+	 * @param filePath The path to check.
+	 * @returns True if the path is in the processed list, false otherwise.
+	 */
+	private isAlreadyProcessed(filePath: string): boolean {
+		console.log(`Checking processed paths for final path: ${filePath}`);
+		console.log(`Current processed paths: ${JSON.stringify(this.settings.processedImagePaths)}`);
+		return this.settings.processedImagePaths.includes(filePath);
+	}
+
+	/**
+	 * Runs the AI transcription and creates the corresponding note.
+	 * @param imageFile The final TFile object of the image (after move/conversion).
+	 * @param noteTargetParentPath The folder path where the note should be created.
+	 * @returns True if transcription and note creation were successful, false otherwise.
+	 */
+	private async runTranscriptionAndCreateNote(imageFile: TFile, noteTargetParentPath: string): Promise<boolean> {
+		try {
+			// Change this intermediate step to notifyVerbose
+			this.notificationService.notifyVerbose(`Starting transcription for ${imageFile.name}...`);
+			const transcription = await this.aiService.transcribeImage(imageFile);
+
+			if (transcription === null) {
+				console.error(`Transcription failed for ${imageFile.path}`);
+				// Error handled by AIService
+				return false;
+			}
+
+			// Change this intermediate step to notifyVerbose
+			this.notificationService.notifyVerbose(`Transcription received for ${imageFile.name}. Creating note...`);
+			const noteFile = await this.noteCreator.createNote(transcription, imageFile, noteTargetParentPath);
+
+			if (!noteFile) {
+				console.error(`Note creation failed for ${imageFile.path}`);
+				// Error handled by NoteCreator
+				return false;
+			}
+
+			return true; // Success
+
+		} catch (error) {
+			console.error(`Error during transcription or note creation for ${imageFile.path}:`, error);
+			this.notificationService.notifyError(`Error during AI processing or note creation for ${imageFile.name}.`);
+			return false; // Indicate failure
+		}
+	}
+
+	/**
+	 * Adds the file path to the processed list and saves settings.
+	 * @param filePath The file path to mark as processed.
+	 */
+	private async markAsProcessed(filePath: string): Promise<void> {
+		try {
+			console.log(`Attempting to mark as processed and save: ${filePath}`);
+			if (!this.settings.processedImagePaths.includes(filePath)) {
+				this.settings.processedImagePaths.push(filePath);
+				await this.saveSettings(); // Persist the change
+				console.log(`Successfully saved processed path: ${filePath}. New list: ${JSON.stringify(this.settings.processedImagePaths)}`);
+			} else {
+				console.log(`Path ${filePath} was already in the processed list.`);
+			}
+		} catch (error) {
+			console.error(`Failed to save processed path ${filePath}:`, error);
+			this.notificationService.notifyError(`Failed to save processed state for ${filePath}. It might be processed again later.`);
+			// Decide if this should throw or just log
 		}
 	}
 

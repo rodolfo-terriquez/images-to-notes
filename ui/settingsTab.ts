@@ -63,7 +63,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             // OpenAI Model
             new Setting(containerEl)
                 .setName('OpenAI Model')
-                .setDesc('Select the OpenAI model to use. I recommend GPT-4.1 Mini for its low cost and high accuracy.')
+                .setDesc('Select the OpenAI model to use. GPT-4.1 Mini is great for its low cost and high accuracy.')
                 .addDropdown(dropdown => {
                     // Use the imported type and constant
                     for (const modelId in OPENAI_MODELS) {
@@ -201,6 +201,17 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                     this.plugin.settings.imageFolderName = value.trim() || DEFAULT_SETTINGS.imageFolderName;
                     // Reflect the potentially changed value back in the input field if it was trimmed or defaulted
                     text.setValue(this.plugin.settings.imageFolderName);
+                    await this.plugin.saveSettings();
+                }));
+
+        // Add the new setting toggle
+        new Setting(containerEl)
+            .setName('Enable Verbose Notifications')
+            .setDesc('Show detailed notifications for every processing step, not just start, finish, and errors.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.verboseNotifications)
+                .onChange(async (value) => {
+                    this.plugin.settings.verboseNotifications = value;
                     await this.plugin.saveSettings();
                 }));
 
