@@ -3,6 +3,7 @@
 	"version": "0.1.0",
 	"description": "Transcribes text from images using AI.",
 	"main": "main.js",
+	"type": "module",
 	"scripts": {
 		"dev": "rollup --config rollup.config.js -w",
 		"build": "rollup --config rollup.config.js --environment BUILD:production"
