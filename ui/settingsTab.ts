@@ -1,5 +1,5 @@
 import { App, PluginSettingTab, Setting, TextAreaComponent, DropdownComponent, TextComponent, Notice } from 'obsidian';
-import ImageTranscriberPlugin from '../main'; // Adjust path as needed
+import ImageTranscriberPlugin from '../main'; // Corrected import
 import { ApiProvider, OpenAiModel, AnthropicModel, DEFAULT_SETTINGS, NoteNamingOption } from '../models/settings'; // Import relevant types AND DEFAULTS AND NoteNamingOption
 
 // Define available models - These should match the types in settings.ts
@@ -26,7 +26,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
         const { containerEl } = this;
 
         containerEl.empty();
-        containerEl.createEl('h2', { text: 'Notes to Markdown Settings' });
+
+        containerEl.createEl('h1', { text: 'Images to Notes Settings' });
 
         // --- API Provider ---
         new Setting(containerEl)
