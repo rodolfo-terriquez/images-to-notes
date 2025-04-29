@@ -1,8 +1,12 @@
-/*
+/* Style for textareas in settings that should take full width */
+.settings-textarea-full-width textarea {
+    width: 100%;
+    box-sizing: border-box; /* Include padding and border in the element's total width and height */
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
-
-If your plugin does not need CSS, delete this file.
-
-*/
+/* Style for warning text in settings */
+.setting-warning {
+    color: var(--text-warning); /* Use Obsidian's warning text color variable */
+    font-size: var(--font-ui-small); /* Use Obsidian's small UI font size variable */
+    margin-top: 5px; /* Add some space above the warning */
+}

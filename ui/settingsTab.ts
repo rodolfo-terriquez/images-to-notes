@@ -132,8 +132,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     });
                 text.inputEl.rows = 4; // Slightly shorter than user prompt
-                text.inputEl.style.width = '100%';
             })
+            .setClass('settings-textarea-full-width')
             .addButton(button => button // Add reset button (Task 18.5)
                 .setIcon('reset')
                 .setTooltip('Reset to default')
@@ -162,8 +162,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     });
                 text.inputEl.rows = 6; // Make it taller
-                text.inputEl.style.width = '100%'; // Ensure it takes full width
             })
+            .setClass('settings-textarea-full-width')
             .addButton(button => button // Add reset button (Task 18.5)
                 .setIcon('reset')
                 .setTooltip('Reset to default')
@@ -244,14 +244,5 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                         new Notice('Clear history cancelled.');
                     }
                 }));
-
-        // Add a CSS snippet for the warning text styling (optional, but good UX)
-        /*
-        .setting-warning {
-            color: var(--text-warning);
-            font-size: var(--font-ui-small);
-            margin-top: 5px;
-        }
-        */
     }
 } 
