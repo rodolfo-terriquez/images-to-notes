@@ -1,4 +1,4 @@
-# Obsidian Images to notes Plugin
+# Image to notes Plugin
 
 Use AI to transcribe photos of handwritten or printed notes into Markdown, creates a new note for each image, then adds the image to the bottom of the Note. 
 
