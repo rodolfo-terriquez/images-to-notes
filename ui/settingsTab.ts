@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting, TextAreaComponent, DropdownComponent, TextComponent, Notice } from 'obsidian';
 import ImageTranscriberPlugin from '../main'; // Corrected import
-import { ApiProvider, OpenAiModel, AnthropicModel, DEFAULT_SETTINGS, NoteNamingOption } from '../models/settings'; // Import relevant types AND DEFAULTS AND NoteNamingOption
+import { ApiProvider, OpenAiModel, AnthropicModel, GoogleModel, DEFAULT_SETTINGS, NoteNamingOption } from '../models/settings'; // Import relevant types AND DEFAULTS AND NoteNamingOption
 
 // Define available models - These should match the types in settings.ts
 const OPENAI_MODELS: Record<OpenAiModel, string> = {
@@ -12,6 +12,11 @@ const OPENAI_MODELS: Record<OpenAiModel, string> = {
 const ANTHROPIC_MODELS: Record<AnthropicModel, string> = {
     'claude-3-5-sonnet-latest': 'Claude 3.5 Sonnet',
     'claude-3-7-sonnet-latest': 'Claude 3.7 Sonnet',
+    'claude-sonnet-4-0': 'Claude Sonnet 4.0',
+};
+
+const GOOGLE_MODELS: Record<GoogleModel, string> = {
+    'gemini-2.0-flash': 'Gemini 2.0 Flash',
 };
 
 export class TranscriptionSettingTab extends PluginSettingTab {
@@ -34,6 +39,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             .addDropdown(dropdown => dropdown
                 .addOption(ApiProvider.OpenAI, 'OpenAI')
                 .addOption(ApiProvider.Anthropic, 'Anthropic')
+                .addOption(ApiProvider.Google, 'Google')
                 .setValue(this.plugin.settings.provider)
                 .onChange(async (value) => {
                     this.plugin.settings.provider = value as ApiProvider;
@@ -111,6 +117,40 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
             if (!this.plugin.settings.anthropicApiKey) {
                  providerDesc.createEl('p', { text: '⚠️ Anthropic API key is required.', cls: 'setting-warning' });
+            }
+
+        } else if (this.plugin.settings.provider === ApiProvider.Google) {
+            // Google API Key
+            new Setting(containerEl)
+                .setName('Google API key')
+                .setDesc('Enter your Google API key for Gemini models.')
+                .addText(text => text
+                    .setPlaceholder('AIza...')
+                    .setValue(this.plugin.settings.googleApiKey)
+                    .onChange(async (value) => {
+                        this.plugin.settings.googleApiKey = value.trim();
+                        await this.plugin.saveSettings();
+                    })
+                    .inputEl.setAttribute('type', 'password')); // Mask the key
+
+            // Google Model
+            new Setting(containerEl)
+                .setName('Google model')
+                .setDesc('Select the Google Gemini model to use.')
+                .addDropdown(dropdown => {
+                    // Use the imported type and constant
+                     for (const modelId in GOOGLE_MODELS) {
+                        dropdown.addOption(modelId, GOOGLE_MODELS[modelId as GoogleModel]);
+                     }
+                    dropdown.setValue(this.plugin.settings.googleModel)
+                    dropdown.onChange(async (value) => {
+                        this.plugin.settings.googleModel = value as GoogleModel; // Cast to specific type
+                        await this.plugin.saveSettings();
+                    });
+                 });
+
+            if (!this.plugin.settings.googleApiKey) {
+                 providerDesc.createEl('p', { text: '⚠️ Google API key is required.', cls: 'setting-warning' });
             }
         }
 

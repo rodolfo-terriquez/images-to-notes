@@ -35,7 +35,7 @@ That's it, everything else is optional.
 
 There are a couple of things you can configure:
 
-*   **API Provider:** Choose between OpenAI and Anthropic.
+*   **API Provider:** Choose between OpenAI, Anthropic, and Google.
 *   **API Key:** Enter the API key for your preferred provider.
 *   **Model:** Select the model you want to use for transcription.
 *   **System Prompt:** This defines the overall role or context for the AI. You can change this and reset it if you mess it up.

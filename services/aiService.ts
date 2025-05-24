@@ -1,5 +1,5 @@
 import { App, requestUrl, RequestUrlParam, RequestUrlResponse, TFile } from 'obsidian';
-import { PluginSettings, OpenAiModel, AnthropicModel } from '../models/settings';
+import { PluginSettings, OpenAiModel, AnthropicModel, GoogleModel } from '../models/settings';
 import { NotificationService } from '../ui/notificationService';
 import { encodeImageToBase64 } from '../utils/fileUtils';
 
@@ -7,6 +7,7 @@ import { encodeImageToBase64 } from '../utils/fileUtils';
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
+const GOOGLE_API_URL = 'https://generativelanguage.googleapis.com/v1/models';
 
 export class AIService {
     constructor(
@@ -33,7 +34,7 @@ export class AIService {
         }
 
         // 2. Determine provider and settings
-        const { provider, openaiApiKey, anthropicApiKey, openaiModel, anthropicModel, systemPrompt, userPrompt } = this.settings;
+        const { provider, openaiApiKey, anthropicApiKey, googleApiKey, openaiModel, anthropicModel, googleModel, systemPrompt, userPrompt } = this.settings;
         const imageUrl = base64ImageWithPrefix; // Use the data URI
 
         // 3. Call appropriate API
@@ -58,6 +59,20 @@ export class AIService {
                 }
                 const mediaType = mediaTypeMatch[1];
                 return await this._transcribeWithAnthropic(base64Data, mediaType, systemPrompt, userPrompt, anthropicApiKey, anthropicModel);
+            } else if (provider === 'google') {
+                if (!googleApiKey) {
+                    this.notificationService.notifyError('Google API key is missing.');
+                    return null;
+                }
+                // Extract base64 data for Google
+                const base64Data = imageUrl.split(',')[1];
+                const mediaTypeMatch = imageUrl.match(/^data:(image\/[a-z]+);base64,/);
+                if (!mediaTypeMatch || !base64Data) {
+                    this.notificationService.notifyError('Could not extract image data for Google.');
+                    return null;
+                }
+                const mediaType = mediaTypeMatch[1];
+                return await this._transcribeWithGoogle(base64Data, mediaType, systemPrompt, userPrompt, googleApiKey, googleModel);
             } else {
                 this.notificationService.notifyError(`Unsupported AI provider selected: ${provider}`);
                 return null;
@@ -222,6 +237,75 @@ export class AIService {
         } catch (error) {
             console.error('Error calling Anthropic API:', error);
              // Re-throw the error to be caught by the main transcribeImage method
+            throw error; 
+        }
+    }
+
+    /**
+     * Calls the Google Gemini API to transcribe the image.
+     */
+    private async _transcribeWithGoogle(
+        base64Data: string,
+        mediaType: string,
+        systemPrompt: string,
+        userPrompt: string,
+        apiKey: string,
+        model: GoogleModel
+    ): Promise<string | null> {
+        this.notificationService.notifyVerbose(`Sending image to Google Gemini (${model})...`);
+        const startTime = Date.now();
+
+        const requestBody = {
+            contents: [
+                {
+                    parts: [
+                        { text: `${systemPrompt}\n\n${userPrompt}` },
+                        {
+                            inline_data: {
+                                mime_type: mediaType,
+                                data: base64Data,
+                            },
+                        },
+                    ],
+                },
+            ],
+            generationConfig: {
+                maxOutputTokens: 4000,
+            },
+        };
+
+        const requestParams: RequestUrlParam = {
+            url: `${GOOGLE_API_URL}/${model}:generateContent?key=${apiKey}`,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+            throw: false, // Prevent requestUrl from throwing on non-2xx status codes
+        };
+
+        try {
+            const response = await requestUrl(requestParams);
+            
+            if (response.status >= 200 && response.status < 300) {
+                const data = response.json;
+                const transcription = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (transcription) {
+                    const endTime = Date.now();
+                    this.notificationService.notifyVerbose(`Google Gemini Response received (${(endTime - startTime) / 1000}s).`);
+                    return transcription.trim();
+                } else {
+                    console.error('Google Gemini response missing transcription content:', data);
+                    throw new Error('Invalid response format from Google Gemini.');
+                }
+            } else {
+                console.error(`Google Gemini API Error (${response.status}):`, response.text);
+                let errorDetails = response.json?.error?.message || response.text || `HTTP status ${response.status}`;
+                throw new Error(`Google Gemini API error: ${errorDetails}`);
+            }
+        } catch (error) {
+            console.error('Error calling Google Gemini API:', error);
+            // Re-throw the error to be caught by the main transcribeImage method
             throw error; 
         }
     }
