@@ -57,12 +57,22 @@ export function getFormattedDate(): string {
  * @returns A promise that resolves with the base64 encoded string.
  * @throws Will throw an error if reading the file fails.
  */
+function _arrayBufferToBase64(buffer: ArrayBuffer): string {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+}
+
 export async function encodeImageToBase64(file: TFile, app: App): Promise<string> {
     try {
-        const buffer = await app.vault.readBinary(file);
-        const base64 = Buffer.from(buffer).toString('base64');
+        const arrayBuffer = await app.vault.readBinary(file);
+        const base64 = _arrayBufferToBase64(arrayBuffer);
         // Determine the correct prefix based on the file extension
-        const mimeType = `image/${file.extension === 'jpg' ? 'jpeg' : file.extension}`;
+        const mimeType = `image/${file.extension.toLowerCase() === 'jpg' ? 'jpeg' : file.extension.toLowerCase()}`;
         return `data:${mimeType};base64,${base64}`;
     } catch (error) {
         console.error(`Error encoding image ${file.path} to base64:`, error);

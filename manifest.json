@@ -6,5 +6,5 @@
 	"description": "Turn photos of handwritten or printed notes into Markdown using AI.",
 	"author": "Rodolfo Terriquez",
 	"authorUrl": "https://github.com/rodolfo-terriquez",
-	"isDesktopOnly": true
+	"isDesktopOnly": false
 }

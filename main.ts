@@ -62,31 +62,40 @@ export default class ImageTranscriberPlugin extends Plugin {
                   new Notice(`Importing ${selectedFiles.length} image(s) to ${targetFolder.name}...`);
 
                   for (const browserFile of Array.from(selectedFiles)) {
-                    try {
-                      const arrayBuffer = await browserFile.arrayBuffer();
-                      const fileName = browserFile.name;
-                      const destinationPath = normalizePath(`${targetFolder.path}/${fileName}`);
-
-                      const existingFile = this.app.vault.getAbstractFileByPath(destinationPath);
-                      if (existingFile) {
-                        new Notice(`File ${fileName} already exists in ${targetFolder.name}. Skipped.`);
+                   const fileName = browserFile.name;
+                   const destinationPath = normalizePath(`${targetFolder.path}/${fileName}`);
+                   if (this.processingPaths.has(destinationPath)) { // Check if already being processed by another mechanism
+                        new Notice(`File ${fileName} is already being processed. Skipped.`);
                         continue;
-                      }
+                   }
 
-                      const tFile = await this.app.vault.createBinary(destinationPath, arrayBuffer);
-                      new Notice(`Imported ${fileName} to ${targetFolder.name}.`);
+                   try {
+                     this.processingPaths.add(destinationPath); // Mark as being processed by this action
 
-                      if (tFile instanceof TFile && isImageFile(tFile)) {
-                        this.processingQueue.addToQueue(tFile);
-                        new Notice(`Added ${fileName} to transcription queue.`);
-                      } else {
-                        new Notice(`File ${fileName} was imported but is not a recognized image or failed to queue.`);
-                      }
-                    } catch (error) {
-                      console.error(`Error importing file ${browserFile.name}:`, error);
-                      new Notice(`Failed to import ${browserFile.name}. Check console for details.`);
-                    }
-                  }
+                     const arrayBuffer = await browserFile.arrayBuffer();
+
+                     const existingFile = this.app.vault.getAbstractFileByPath(destinationPath);
+                     if (existingFile) {
+                       new Notice(`File ${fileName} already exists in ${targetFolder.name}. Skipped.`);
+                       continue;
+                     }
+
+                     const tFile = await this.app.vault.createBinary(destinationPath, arrayBuffer);
+                     new Notice(`Imported ${fileName} to ${targetFolder.name}.`);
+
+                     if (tFile instanceof TFile && isImageFile(tFile)) {
+                       this.processingQueue.addToQueue(tFile); // This will be the primary add
+                       new Notice(`Added ${fileName} to transcription queue.`);
+                     } else {
+                       new Notice(`File ${fileName} was imported but is not a recognized image or failed to queue.`);
+                     }
+                   } catch (error) {
+                     console.error(`Error importing file ${fileName}:`, error);
+                     new Notice(`Failed to import ${fileName}. Check console for details.`);
+                   } finally {
+                     this.processingPaths.delete(destinationPath); // Clean up the flag
+                   }
+                 }
                 };
 
                 input.click();
