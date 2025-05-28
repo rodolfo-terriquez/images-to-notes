@@ -31,6 +31,10 @@ export interface PluginSettings {
     imageFolderName: string; // Added setting for the image folder name
     processedImagePaths: string[]; // Added to track processed images
     verboseNotifications: boolean;
+    // Mobile optimization settings
+    mobileOptimizationEnabled: boolean; // Whether mobile optimizations are enabled
+    imageQuality: number; // Image quality for compression (1-100)
+    maxConcurrentProcessing: number; // Maximum number of concurrent processing jobs
     // Add any other settings identified in PRD Section 4.3 if available
 }
 
@@ -48,4 +52,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     imageFolderName: 'Images', // Default image folder name (Task 18.2)
     processedImagePaths: [], // Initialize as empty array
     verboseNotifications: false,
+    // Mobile optimization default settings
+    mobileOptimizationEnabled: true, // Enable mobile optimizations by default
+    imageQuality: 90, // Default image quality (1-100)
+    maxConcurrentProcessing: 2, // Default max concurrent processing jobs
 }; 

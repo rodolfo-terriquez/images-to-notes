@@ -1,4 +1,4 @@
-import { Plugin, TAbstractFile, TFile, normalizePath, Editor, MarkdownView, MarkdownFileInfo, Workspace } from 'obsidian';
+import { Plugin, TAbstractFile, TFile, normalizePath, Editor, MarkdownView, MarkdownFileInfo, Workspace, Platform, TFolder, Menu, Notice } from 'obsidian';
 import { PluginSettings, DEFAULT_SETTINGS, NoteNamingOption } from 'models/settings';
 import { TranscriptionSettingTab } from 'ui/settingsTab';
 import { ProcessingQueue } from './services/processingQueue';
@@ -18,10 +18,14 @@ export default class ImageTranscriberPlugin extends Plugin {
 	isReady: boolean = false;
 	private droppedInEditorPaths = new Set<string>();
 	private processingPaths = new Set<string>();
+	private isMobileDevice: boolean = false;
 
 	async onload() {
 		// console.log('Loading Images to notes Plugin');
 		await this.loadSettings();
+
+		// Check if running on mobile
+		this.isMobileDevice = Platform.isMobile;
 
 		this.notificationService = new NotificationService(this.settings);
 		this.aiService = new AIService(this.settings, this.notificationService, this.app);
@@ -29,6 +33,68 @@ export default class ImageTranscriberPlugin extends Plugin {
 		this.processingQueue = new ProcessingQueue();
 
 		this.processingQueue.setProcessCallback(this.processImageFile.bind(this));
+
+    this.registerEvent(
+      this.app.workspace.on('file-menu', (menu: Menu, file) => {
+        // Check if the file is a folder
+        if (file instanceof TFolder) {
+          menu.addItem((item) => {
+            item
+              .setTitle('New image to note')
+              .setIcon('image-file') // Or any other relevant icon
+              .setSection('action-primary')
+              .onClick(async () => {
+                const targetFolder = file as TFolder;
+                new Notice(`Select images to add to folder: ${targetFolder.path}`);
+
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
+                input.multiple = true;
+
+                input.onchange = async (event) => {
+                  const selectedFiles = (event.target as HTMLInputElement).files;
+                  if (!selectedFiles || selectedFiles.length === 0) {
+                    new Notice('No files selected.');
+                    return;
+                  }
+
+                  new Notice(`Importing ${selectedFiles.length} image(s) to ${targetFolder.name}...`);
+
+                  for (const browserFile of Array.from(selectedFiles)) {
+                    try {
+                      const arrayBuffer = await browserFile.arrayBuffer();
+                      const fileName = browserFile.name;
+                      const destinationPath = normalizePath(`${targetFolder.path}/${fileName}`);
+
+                      const existingFile = this.app.vault.getAbstractFileByPath(destinationPath);
+                      if (existingFile) {
+                        new Notice(`File ${fileName} already exists in ${targetFolder.name}. Skipped.`);
+                        continue;
+                      }
+
+                      const tFile = await this.app.vault.createBinary(destinationPath, arrayBuffer);
+                      new Notice(`Imported ${fileName} to ${targetFolder.name}.`);
+
+                      if (tFile instanceof TFile && isImageFile(tFile)) {
+                        this.processingQueue.addToQueue(tFile);
+                        new Notice(`Added ${fileName} to transcription queue.`);
+                      } else {
+                        new Notice(`File ${fileName} was imported but is not a recognized image or failed to queue.`);
+                      }
+                    } catch (error) {
+                      console.error(`Error importing file ${browserFile.name}:`, error);
+                      new Notice(`Failed to import ${browserFile.name}. Check console for details.`);
+                    }
+                  }
+                };
+
+                input.click();
+              });
+          });
+        }
+      })
+    );
 
 		this.addSettingTab(new TranscriptionSettingTab(this.app, this));
 
@@ -46,6 +112,12 @@ export default class ImageTranscriberPlugin extends Plugin {
 			this.app.workspace.on('editor-drop', this.handleEditorDrop.bind(this))
 		);
 
+		// Mobile-specific initialization if needed
+		if (this.isMobileDevice) {
+			// Adjust any settings or behavior for mobile
+			this.initializeMobileSupport();
+		}
+
 		// console.log('Images to notes Plugin loaded. File watcher registration deferred until layout ready.');
 	}
 
@@ -53,6 +125,87 @@ export default class ImageTranscriberPlugin extends Plugin {
 		// console.log('Unloading Images to notes Plugin');
 		// Cleanup logic: The registerEvent method handles unregistering the vault event.
 		// Queue processing might need explicit stopping if it involves long operations.
+	}
+
+	private initializeMobileSupport() {
+		// Mobile-specific initialization code
+		console.log("Initializing mobile support for Notes to Markdown plugin");
+		
+		// Adjust processing queue for mobile - limit concurrent operations
+		// Mobile devices have less processing power
+		// Note: We'll need to add setMaxConcurrent to ProcessingQueue class
+		// this.processingQueue.setMaxConcurrent(1);
+		
+		// Handle mobile-specific file system access
+		// On iOS, file access might be more restricted
+		if (Platform.isIosApp) {
+			console.log("iOS-specific adjustments applied");
+			// iOS-specific adjustments for file handling
+			this.adjustForIOS();
+		} 
+		// Android-specific adjustments if needed
+		else if (Platform.isAndroidApp) {
+			console.log("Android-specific adjustments applied");
+			// Android-specific adjustments
+			this.adjustForAndroid();
+		}
+	}
+	
+	private adjustForIOS() {
+		// iOS-specific adjustments for file system limitations
+		console.log('Applying iOS-specific adjustments');
+		
+		// 1. Adjust file path handling for iOS
+		// iOS has a different file system structure and stricter permissions
+		
+		// 2. Modify image processing settings for iOS
+		// Reduce processing quality to improve performance on mobile
+		if (this.settings.imageQuality && this.settings.imageQuality > 80) {
+			console.log('Reducing image quality for iOS performance');
+			const previousQuality = this.settings.imageQuality;
+			this.settings.imageQuality = 80; // Lower quality for better performance
+			this.notificationService.notifyVerbose(
+				`Mobile optimization: Image quality reduced from ${previousQuality} to 80 for better performance.`
+			);
+		}
+		
+		// 3. Handle iOS-specific file access patterns
+		// iOS may require different approaches to file access
+		
+		// 4. Adjust notification behavior for iOS
+		// iOS notifications should be more concise
+		this.notificationService.notifyInfo('Mobile compatibility mode enabled for iOS');
+	}
+	
+	private adjustForAndroid() {
+		// Android-specific adjustments for file system access patterns
+		console.log('Applying Android-specific adjustments');
+		
+		// 1. Handle Android storage permissions
+		// Android has a different permission model, especially for external storage
+		
+		// 2. Adjust image processing for Android
+		// Android devices vary widely in capabilities, so we need to be more adaptive
+		if (this.settings.mobileOptimizationEnabled) {
+			// Adjust concurrent processing for Android
+			const previousConcurrent = this.settings.maxConcurrentProcessing;
+			this.settings.maxConcurrentProcessing = 1; // Limit to 1 on Android for better stability
+			
+			// Adjust image quality if needed
+			if (this.settings.imageQuality > 85) {
+				const previousQuality = this.settings.imageQuality;
+				this.settings.imageQuality = 85; // Slightly lower quality for better performance
+				this.notificationService.notifyVerbose(
+					`Mobile optimization: Image quality adjusted from ${previousQuality} to 85 for Android.`
+				);
+			}
+		}
+		
+		// 3. Handle Android-specific file paths
+		// Android file paths may need special handling
+		
+		// 4. Adjust notification behavior for Android
+		this.notificationService.notifyInfo('Mobile compatibility mode enabled for Android');
 	}
 
 	async loadSettings() {
@@ -98,6 +251,13 @@ export default class ImageTranscriberPlugin extends Plugin {
 	}
 
 	private async handleFileCreate(file: TAbstractFile) {
+		// Mobile-specific handling for file creation
+		if (this.isMobileDevice) {
+			// On mobile, we might need to handle file creation differently
+			console.log(`Mobile file creation detected: ${file.path}`);
+			// Additional mobile-specific processing can be added here
+		}
+		
 		// --- Initial Checks ---
 		// 1. Check if this file path was flagged as dropped in the editor
 		if (file instanceof TFile && this.droppedInEditorPaths.has(file.path)) {

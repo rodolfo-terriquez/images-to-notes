@@ -5,6 +5,8 @@ export class ProcessingQueue {
     private queue: ProcessingJob[] = [];
     private isProcessing: boolean = false;
     private processing: ProcessingJob | null = null;
+    private maxConcurrent: number = 2; // Default max concurrent processing jobs
+    private activeJobs: number = 0; // Track number of active jobs
 
     // The actual processing logic is now injected via setProcessCallback
     private processCallback: (job: ProcessingJob) => Promise<void> = async () => { // Updated type
@@ -13,6 +15,17 @@ export class ProcessingQueue {
         // Optionally throw an error or handle it gracefully
         // throw new Error("Process callback not set");
     };
+    
+    /**
+     * Sets the maximum number of concurrent processing jobs.
+     * Useful for mobile optimization to limit resource usage.
+     * @param max The maximum number of concurrent jobs (1-5)
+     */
+    public setMaxConcurrent(max: number): void {
+        // Ensure max is between 1 and 5
+        this.maxConcurrent = Math.max(1, Math.min(5, max));
+        console.log(`ProcessingQueue: Max concurrent jobs set to ${this.maxConcurrent}`);
+    }
 
     // Setter for the processing callback
     public setProcessCallback(callback: (job: ProcessingJob) => Promise<void>) { // Updated type
@@ -57,8 +70,16 @@ export class ProcessingQueue {
 
     /**
      * Processes the next pending job in the queue.
+     * Respects maxConcurrent limit for mobile optimization.
      */
     async processNext() {
+        // Check if we're already at the maximum number of concurrent jobs
+        if (this.activeJobs >= this.maxConcurrent) {
+            // console.log(`Already at max concurrent jobs (${this.activeJobs}/${this.maxConcurrent}), waiting...`);
+            return; // Already at max concurrent jobs
+        }
+
+        // Check if we're already processing (legacy check, can be removed if activeJobs is fully implemented)
         if (this.isProcessing) {
             return; // Already processing
         }
@@ -74,8 +95,9 @@ export class ProcessingQueue {
 
         this.isProcessing = true;
         this.processing = nextJob;
+        this.activeJobs++; // Increment active jobs counter
 
-        // console.log(`Processing job for initial file ${nextJob.initialFile.path}`); // Log initial path
+        // console.log(`Processing job for initial file ${nextJob.initialFile.path}. Active jobs: ${this.activeJobs}/${this.maxConcurrent}`);
 
         try {
             // Call the actual processing function (will handle convert, compress, move, transcribe, etc.)
@@ -89,6 +111,8 @@ export class ProcessingQueue {
             // console.log(`Finished processing job for initial file ${nextJob.initialFile.path}. Queue size: ${this.queue.length}`);
             this.processing = null;
             this.isProcessing = false;
+            this.activeJobs--; // Decrement active jobs counter
+            
             // Check if there are more jobs to process
             this.processNext(); 
         }

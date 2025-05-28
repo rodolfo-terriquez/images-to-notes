@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, TextAreaComponent, DropdownComponent, TextComponent, Notice } from 'obsidian';
+import { App, PluginSettingTab, Setting, TextAreaComponent, DropdownComponent, TextComponent, Notice, ButtonComponent } from 'obsidian';
 import ImageTranscriberPlugin from '../main'; // Corrected import
 import { ApiProvider, OpenAiModel, AnthropicModel, GoogleModel, DEFAULT_SETTINGS, NoteNamingOption } from '../models/settings'; // Import relevant types AND DEFAULTS AND NoteNamingOption
 
@@ -48,7 +48,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                 }));
 
         // --- Provider Specific Settings ---
-        const providerDesc = containerEl.createDiv({ cls: 'provider-settings-desc' }); // Container for descriptions/warnings
+        const providerDesc = containerEl.createDiv({ cls: 'imgtono-provider-settings-desc' }); // Container for descriptions/warnings
         providerDesc.empty(); // Clear previous warnings
 
         if (this.plugin.settings.provider === ApiProvider.OpenAI) {
@@ -82,7 +82,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                  });
 
             if (!this.plugin.settings.openaiApiKey) {
-                 providerDesc.createEl('p', { text: '⚠️ OpenAI API key is required.', cls: 'setting-warning' });
+                 providerDesc.createEl('p', { text: '⚠️ OpenAI API key is required.', cls: 'imgtono-setting-warning' });
             }
 
         } else if (this.plugin.settings.provider === ApiProvider.Anthropic) {
@@ -116,7 +116,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                  });
 
             if (!this.plugin.settings.anthropicApiKey) {
-                 providerDesc.createEl('p', { text: '⚠️ Anthropic API key is required.', cls: 'setting-warning' });
+                 providerDesc.createEl('p', { text: '⚠️ Anthropic API key is required.', cls: 'imgtono-setting-warning' });
             }
 
         } else if (this.plugin.settings.provider === ApiProvider.Google) {
@@ -150,86 +150,111 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                  });
 
             if (!this.plugin.settings.googleApiKey) {
-                 providerDesc.createEl('p', { text: '⚠️ Google API key is required.', cls: 'setting-warning' });
+                 providerDesc.createEl('p', { text: '⚠️ Google API key is required.', cls: 'imgtono-setting-warning' });
             }
         }
 
         // --- System Prompt ---
         let systemPromptTextArea: TextAreaComponent; // Variable to hold the text area component
-        new Setting(containerEl)
-            .setName('System prompt')
-            .setDesc('The system prompt to guide the AI model\'s behavior (e.g., role, context).')
-            .addTextArea(text => {
-                systemPromptTextArea = text; // Store the component
-                text
-                    // .setPlaceholder('e.g., You are an expert transcriber.')
-                    .setPlaceholder(DEFAULT_SETTINGS.systemPrompt)
-                    .setValue(this.plugin.settings.systemPrompt)
-                    .onChange(async (value) => {
-                        this.plugin.settings.systemPrompt = value;
-                        await this.plugin.saveSettings();
-                    });
-                text.inputEl.rows = 4; // Slightly shorter than user prompt
-            })
-            .setClass('settings-textarea-full-width')
-            .addButton(button => button // Add reset button (Task 18.5)
-                .setIcon('reset')
-                .setTooltip('Reset to default')
-                .onClick(async () => {
-                    if (systemPromptTextArea) {
-                        this.plugin.settings.systemPrompt = DEFAULT_SETTINGS.systemPrompt;
-                        systemPromptTextArea.setValue(this.plugin.settings.systemPrompt);
-                        await this.plugin.saveSettings();
-                        new Notice('System prompt reset to default.');
-                    }
-                }));
+        
+        // Create the system prompt setting with vertical layout
+        const systemPromptContainer = containerEl.createDiv({ cls: 'imgtono-vertical-layout-container' });
+        
+        // Add the setting header (name and description)
+        const systemPromptHeader = systemPromptContainer.createDiv({ cls: 'imgtono-setting-item-info' });
+        const systemPromptName = systemPromptHeader.createDiv({ cls: 'imgtono-setting-item-name' });
+        systemPromptName.setText('System prompt');
+        const systemPromptDesc = systemPromptHeader.createDiv({ cls: 'imgtono-setting-item-description' });
+        systemPromptDesc.setText('The system prompt to guide the AI model\'s behavior (e.g., role, context).');
+        
+        // Add the text area below the description
+        const systemPromptControl = systemPromptContainer.createDiv({ cls: 'imgtono-setting-item-control' });
+        systemPromptTextArea = new TextAreaComponent(systemPromptControl);
+        systemPromptTextArea
+            .setPlaceholder(DEFAULT_SETTINGS.systemPrompt)
+            .setValue(this.plugin.settings.systemPrompt)
+            .onChange(async (value) => {
+                this.plugin.settings.systemPrompt = value;
+                await this.plugin.saveSettings();
+            });
+        systemPromptTextArea.inputEl.rows = 4;
+        systemPromptTextArea.inputEl.style.width = '100%';
+        
+        // Add reset button below the text area
+        const systemPromptButtonContainer = systemPromptContainer.createDiv({ cls: 'imgtono-setting-button-row' });
+        new ButtonComponent(systemPromptButtonContainer)
+            .setIcon('reset')
+            .setButtonText('Reset to default')
+            .onClick(async () => {
+                this.plugin.settings.systemPrompt = DEFAULT_SETTINGS.systemPrompt;
+                systemPromptTextArea.setValue(this.plugin.settings.systemPrompt);
+                await this.plugin.saveSettings();
+                new Notice('System prompt reset to default.');
+            });
 
         // --- User Prompt (Previously Transcription Prompt) ---
         let userPromptTextArea: TextAreaComponent; // Variable to hold the text area component
-        new Setting(containerEl)
-            .setName('User prompt') // Renamed from Transcription Prompt
-            .setDesc('The specific instruction for the AI for this image.') // Updated description
-            .addTextArea(text => {
-                userPromptTextArea = text; // Store the component
-                text
-                    // .setPlaceholder('e.g., Transcribe the text in this image.')
-                    .setPlaceholder(DEFAULT_SETTINGS.userPrompt)
-                    .setValue(this.plugin.settings.userPrompt) // Updated to use userPrompt
-                    .onChange(async (value) => {
-                        this.plugin.settings.userPrompt = value; // Updated to save to userPrompt
-                        await this.plugin.saveSettings();
-                    });
-                text.inputEl.rows = 6; // Make it taller
-            })
-            .setClass('settings-textarea-full-width')
-            .addButton(button => button // Add reset button (Task 18.5)
-                .setIcon('reset')
-                .setTooltip('Reset to default')
-                .onClick(async () => {
-                    if (userPromptTextArea) {
-                        this.plugin.settings.userPrompt = DEFAULT_SETTINGS.userPrompt;
-                        userPromptTextArea.setValue(this.plugin.settings.userPrompt);
-                        await this.plugin.saveSettings();
-                        new Notice('User prompt reset to default.');
-                    }
-                }));
+        
+        // Create the user prompt setting with vertical layout
+        const userPromptContainer = containerEl.createDiv({ cls: 'imgtono-vertical-layout-container' });
+        
+        // Add the setting header (name and description)
+        const userPromptHeader = userPromptContainer.createDiv({ cls: 'imgtono-setting-item-info' });
+        const userPromptName = userPromptHeader.createDiv({ cls: 'imgtono-setting-item-name' });
+        userPromptName.setText('User prompt');
+        const userPromptDesc = userPromptHeader.createDiv({ cls: 'imgtono-setting-item-description' });
+        userPromptDesc.setText('The specific instruction for the AI for this image.');
+        
+        // Add the text area below the description
+        const userPromptControl = userPromptContainer.createDiv({ cls: 'imgtono-setting-item-control' });
+        userPromptTextArea = new TextAreaComponent(userPromptControl);
+        userPromptTextArea
+            .setPlaceholder(DEFAULT_SETTINGS.userPrompt)
+            .setValue(this.plugin.settings.userPrompt)
+            .onChange(async (value) => {
+                this.plugin.settings.userPrompt = value;
+                await this.plugin.saveSettings();
+            });
+        userPromptTextArea.inputEl.rows = 6; // Make it taller
+        userPromptTextArea.inputEl.style.width = '100%';
+        
+        // Add reset button below the text area
+        const userPromptButtonContainer = userPromptContainer.createDiv({ cls: 'imgtono-setting-button-row' });
+        new ButtonComponent(userPromptButtonContainer)
+            .setIcon('reset')
+            .setButtonText('Reset to default')
+            .onClick(async () => {
+                this.plugin.settings.userPrompt = DEFAULT_SETTINGS.userPrompt;
+                userPromptTextArea.setValue(this.plugin.settings.userPrompt);
+                await this.plugin.saveSettings();
+                new Notice('User prompt reset to default.');
+            });
 
         // --- Note Naming ---
-        new Setting(containerEl)
-            .setName('Note naming convention')
-            .setDesc('How should the new transcription note be named?')
-            .addDropdown(dropdown => {
-                dropdown
-                    // Use the enum keys for values and provide user-friendly names
-                    .addOption(NoteNamingOption.FirstLine, 'Use first line of transcription (strips markdown)')
-                    .addOption(NoteNamingOption.ImageName, 'Use image name (e.g., ImageName.md)')
-                    .addOption(NoteNamingOption.DateImageName, 'Use date + image name (e.g., YYYYMMDD_ImageName.md)')
-                    .addOption(NoteNamingOption.FolderDateNum, 'Use folder + date + image name (e.g., Folder_YYYYMMDD_ImageName.md)')
-                    .setValue(this.plugin.settings.noteNamingOption) // Use the enum value directly
-                    .onChange(async (value) => {
-                        this.plugin.settings.noteNamingOption = value as NoteNamingOption; // Cast the string value back to the enum type
-                        await this.plugin.saveSettings();
-                    });
+        // Create the note naming setting with vertical layout
+        const noteNamingContainer = containerEl.createDiv({ cls: 'imgtono-vertical-layout-container' });
+        
+        // Add the setting header (name and description)
+        const noteNamingHeader = noteNamingContainer.createDiv({ cls: 'imgtono-setting-item-info' });
+        const noteNamingName = noteNamingHeader.createDiv({ cls: 'imgtono-setting-item-name' });
+        noteNamingName.setText('Note naming convention');
+        const noteNamingDesc = noteNamingHeader.createDiv({ cls: 'imgtono-setting-item-description' });
+        noteNamingDesc.setText('How should the new transcription note be named?');
+        
+        // Add the dropdown below the description
+        const noteNamingControl = noteNamingContainer.createDiv({ cls: 'imgtono-setting-item-control' });
+        const dropdown = new DropdownComponent(noteNamingControl);
+        
+        // Use the enum keys for values and provide user-friendly names
+        dropdown
+            .addOption(NoteNamingOption.FirstLine, 'Use first line of transcription (strips markdown)')
+            .addOption(NoteNamingOption.ImageName, 'Use image name (e.g., ImageName.md)')
+            .addOption(NoteNamingOption.DateImageName, 'Use date + image name (e.g., YYYYMMDD_ImageName.md)')
+            .addOption(NoteNamingOption.FolderDateNum, 'Use folder + date + image name (e.g., Folder_YYYYMMDD_ImageName.md)')
+            .setValue(this.plugin.settings.noteNamingOption) // Use the enum value directly
+            .onChange(async (value) => {
+                this.plugin.settings.noteNamingOption = value as NoteNamingOption; // Cast the string value back to the enum type
+                await this.plugin.saveSettings();
             });
 
         // --- Image Folder Name --- (Task 18.1, 18.2)
