@@ -36,6 +36,8 @@ export interface PluginSettings {
     imageQuality: number; // Image quality for compression (1-100)
     maxConcurrentProcessing: number; // Maximum number of concurrent processing jobs
     // Add any other settings identified in PRD Section 4.3 if available
+    transcribeOnlySpecificFolder: boolean; // New setting
+    specificFolderForTranscription: string; // New setting
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -56,4 +58,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     mobileOptimizationEnabled: true, // Enable mobile optimizations by default
     imageQuality: 90, // Default image quality (1-100)
     maxConcurrentProcessing: 2, // Default max concurrent processing jobs
+    transcribeOnlySpecificFolder: false, // Default for new setting
+    specificFolderForTranscription: '', // Default for new setting
 }; 

@@ -59,7 +59,27 @@ export default class ImageTranscriberPlugin extends Plugin {
                     return;
                   }
 
-                  new Notice(`Importing ${selectedFiles.length} image(s) to ${targetFolder.name}...`);
+                  // Determine if any notices about the import/queue process should be shown at all for this batch
+                  let showBatchImportNotice = true;
+                  if (this.settings.transcribeOnlySpecificFolder) {
+                    const specificFolderSetting = this.settings.specificFolderForTranscription;
+                    if (!specificFolderSetting) {
+                        showBatchImportNotice = false; // No specific folder selected, so no processing will occur
+                    } else {
+                        let normalizedSpecificFolder = normalizePath(specificFolderSetting);
+                        if (normalizedSpecificFolder === '.') normalizedSpecificFolder = '/';
+                        let normalizedTargetFolderPath = normalizePath(targetFolder.path);
+                        if (normalizedTargetFolderPath === '.') normalizedTargetFolderPath = '/';
+
+                        if (normalizedTargetFolderPath !== normalizedSpecificFolder) {
+                            showBatchImportNotice = false; // Target folder is not the designated one
+                        }
+                    }
+                  }
+
+                  if (showBatchImportNotice) {
+                    new Notice(`Importing ${selectedFiles.length} image(s) to ${targetFolder.name}...`);
+                  }
 
                   for (const browserFile of Array.from(selectedFiles)) {
                    const fileName = browserFile.name;
@@ -81,13 +101,43 @@ export default class ImageTranscriberPlugin extends Plugin {
                      }
 
                      const tFile = await this.app.vault.createBinary(destinationPath, arrayBuffer);
-                     new Notice(`Imported ${fileName} to ${targetFolder.name}.`);
 
                      if (tFile instanceof TFile && isImageFile(tFile)) {
-                       this.processingQueue.addToQueue(tFile); // This will be the primary add
-                       new Notice(`Added ${fileName} to transcription queue.`);
+												// --- Folder-Specific Transcription Check for file-menu ---
+												let shouldQueue = true;
+												if (this.settings.transcribeOnlySpecificFolder) {
+														const specificFolderSetting = this.settings.specificFolderForTranscription;
+														if (!specificFolderSetting) {
+																shouldQueue = false; // No folder selected, don't queue
+																// console.log('Specific folder transcription ON, but no folder selected. Not queueing imported file.');
+														} else {
+																let normalizedSpecificFolder = normalizePath(specificFolderSetting);
+																if (normalizedSpecificFolder === '.') normalizedSpecificFolder = '/';
+
+																// targetFolder is a TFolder, its path is already the parent folder path
+																let normalizedTargetFolderPath = normalizePath(targetFolder.path);
+																if (normalizedTargetFolderPath === '.') normalizedTargetFolderPath = '/';
+																
+																if (normalizedTargetFolderPath !== normalizedSpecificFolder) {
+																		shouldQueue = false;
+																		// console.log(`Imported file ${fileName} to ${targetFolder.name}, which is not the designated transcription folder "${specificFolderSetting}". Not queueing.`);
+																		this.notificationService.notifyVerbose(`Imported ${fileName} to ${targetFolder.name}, but it's not the designated transcription folder. Not queueing.`);
+																}
+														}
+												}
+												// --- End Folder-Specific Transcription Check ---
+
+												if (shouldQueue) {
+                                     new Notice(`Imported ${fileName} to ${targetFolder.name}.`); 
+														this.processingQueue.addToQueue(tFile);
+														new Notice(`Added ${fileName} to transcription queue.`);
+												} // else: No notice if shouldQueue is false (due to folder settings)
                      } else {
-                       new Notice(`File ${fileName} was imported but is not a recognized image or failed to queue.`);
+                       // This notice is about the file itself being problematic, not about queueing policy.
+                       // Show it if the initial batch import notice was also shown, to avoid orphaned messages.
+                       if (showBatchImportNotice) {
+                            new Notice(`Imported ${fileName} to ${targetFolder.name}, but it's not a recognized image or failed to queue.`);
+                       }
                      }
                    } catch (error) {
                      console.error(`Error importing file ${fileName}:`, error);
@@ -281,6 +331,35 @@ export default class ImageTranscriberPlugin extends Plugin {
 			return;
 		}
 
+		// --- Folder-Specific Transcription Check ---
+		if (this.settings.transcribeOnlySpecificFolder) {
+			const specificFolder = this.settings.specificFolderForTranscription;
+			if (!specificFolder) {
+				// console.log('Specific folder transcription is ON, but no folder selected. Skipping file:', file.path);
+				return; // Don't proceed to add to processingPaths or queue
+			}
+
+			const parentPathOfFile = getParentFolderPath(file.path);
+			
+			let normalizedSpecificFolder = normalizePath(specificFolder);
+			// Ensure root path ('/') is used for comparison if specific folder is root
+			if (normalizedSpecificFolder === '.') normalizedSpecificFolder = '/';
+
+			let normalizedParentPathOfFile = normalizePath(parentPathOfFile);
+			// Ensure root path ('/') is used for comparison if file is in root
+			if (normalizedParentPathOfFile === '.') normalizedParentPathOfFile = '/';
+
+			// console.log(`Folder check: File in "${normalizedParentPathOfFile}", Target folder "${normalizedSpecificFolder}"`);
+
+			if (normalizedParentPathOfFile !== normalizedSpecificFolder) {
+				// console.log(`File ${file.path} is not in the designated folder "${specificFolder}". Skipping transcription.`);
+				// this.notificationService.notifyVerbose(`Skipped: ${file.name} is not in the designated transcription folder.`); // Potentially too noisy
+				return; // Don't proceed
+			}
+			// console.log(`File ${file.path} is in the designated folder "${specificFolder}". Proceeding.`);
+		}
+		// --- End Folder-Specific Transcription Check ---
+
 		// 4. Check if this path is already being added to the queue (brief lock)
 		if (this.processingPaths.has(file.path)) {
 			// console.log(`Initial path already being added to queue, skipping: ${file.path}`);
@@ -294,7 +373,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 		try {
 			// console.log(`Adding initial file to processing queue: ${file.path}`);
 			// Add the initial TFile object to the queue
-			this.processingQueue.addToQueue(file);
+			this.processingQueue.addToQueue(file as TFile);
 		} catch (error) {
 			console.error(`Error adding file ${file.path} to processing queue:`, error);
 		} finally {
