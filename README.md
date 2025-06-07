@@ -33,19 +33,23 @@ That's it, everything else is optional.
 
 ## Configuration
 
-There are a couple of things you can configure:
+The plugin settings allow you to customize how your images are processed and where the output files are stored.
 
 *   **API Provider:** Choose between OpenAI, Anthropic, and Google.
-*   **API Key:** Enter the API key for your preferred provider.
-*   **Model:** Select the model you want to use for transcription.
-*   **System Prompt:** This defines the overall role or context for the AI. You can change this and reset it if you mess it up.
-*   **User Prompt:** Provide the specific instructions for transcribing the image. Edit this to better suit your handwritten note style or change something about the format of the transcription.
-*   **Note Naming Conventions:**
-    *   `Use First Line of Transcription`: Uses the first non-empty line of the transcription as the note title.
-    *   `Use Image Name`: Uses the image name as the note title.
-    *   `Use Date + Image Name`: Creates notes like `YYYYMMDD_ImageName.md`.
-    *   `Folder + Date + Image Name`: Creates notes like `FolderName_YYYYMMDD_ImageName.md`.
-    
-*   **Image Folder Name:** Specify the name of the subfolder where processed images should be stored (defaults to `Images`).
+*   **API Key:** Enter the API key for your chosen provider.
+*   **Model:** Select the specific AI model you want to use for transcription.
+*   **System Prompt:** Defines the overall role or context for the AI (e.g., "You are an expert at transcribing handwritten notes..."). You can customize this and reset it to the default if needed.
+*   **User Prompt:** The specific instruction for the AI for each image. You can edit this to better suit your note style or change the output format.
+*   **Note Naming Conventions:** Choose how your new transcription notes are named. Options include using the first line of the transcription, the image name, or various combinations with dates and folder names.
+*   **Image Source Control:**
+    *   **Transcribe only from a specific folder:** When enabled, the plugin will only process images that are added to the folder you select here. This is useful for preventing accidental transcriptions.
+*   **Output Destination:**
+    *   **Image destination:** You can choose to save processed images either in a subfolder (default) or in a specific folder you select from a dropdown.
+    *   **Note destination:** You can choose to create transcription notes either alongside the original image's location (default) or in a specific folder you select from a dropdown.
+*   **Image subfolder name:** If you choose the "Create a subfolder" option for image destinations, this setting lets you define the name of that subfolder (defaults to `Images`).
+*   **Mobile Optimizations:**
+    *   **Enable mobile optimization:** Optimizes image processing on mobile devices to improve performance.
+*   **Verbose Notifications:**
+    *   **Enable verbose notifications:** Show detailed notifications for every processing step, not just start, finish, and errors.
 *   **Maintenance:**
     *   **Clear Processed Image History:** A button to reset the list of images the plugin knows it has already processed. Useful for re-processing or after clearing parts of your vault.

@@ -53,9 +53,12 @@ export default class ImageTranscriberPlugin extends Plugin {
                 input.multiple = true;
 
                 input.onchange = async (event) => {
-                  const selectedFiles = (event.target as HTMLInputElement).files;
+                  const M_inputElement = event.target as HTMLInputElement;
+                  const selectedFiles = M_inputElement.files;
+
                   if (!selectedFiles || selectedFiles.length === 0) {
-                    new Notice('No files selected.');
+                    new Notice('No files selected or photo not captured successfully.');
+                    if (M_inputElement) M_inputElement.value = ''; // Reset to allow retry
                     return;
                   }
 
@@ -146,6 +149,8 @@ export default class ImageTranscriberPlugin extends Plugin {
                      this.processingPaths.delete(destinationPath); // Clean up the flag
                    }
                  }
+                 // Reset input after all files are processed or loop finishes
+                 if (M_inputElement) M_inputElement.value = '';
                 };
 
                 input.click();
@@ -395,6 +400,14 @@ export default class ImageTranscriberPlugin extends Plugin {
 		try {
 			this.notificationService.notifyInfo(`Processing ${initialFile.name}...`);
 
+			// Determine destination paths based on settings
+			const { imageDestination, noteDestination } = this.determineDestinationPaths(initialFile);
+			
+			// Ensure destination folders exist before proceeding
+			await this.ensureFolderExists(imageDestination, 'image');
+			await this.ensureFolderExists(noteDestination, 'note');
+
+
 			// 1. HEIC Conversion
 			fileToProcess = await this.handleHeicConversion(fileToProcess);
 			if (!fileToProcess) {
@@ -407,13 +420,13 @@ export default class ImageTranscriberPlugin extends Plugin {
 			// Compression failure is logged but doesn't stop the process
 
 			// 3. File Moving & Path Handling
-			const moveResult = await this.handleFileMove(fileToProcess);
+			const moveResult = await this.handleFileMove(fileToProcess, imageDestination);
 			if (!moveResult) {
 				// Error logged within handleFileMove, mark job as error
 				this.processingQueue.markAsError(job, 'File move/folder handling failed');
 				return;
 			}
-			const { finalPath, noteTargetParentPath } = moveResult;
+			const { finalPath } = moveResult;
 			// fileToProcess reference might be updated by renameFile inside handleFileMove,
 			// but we primarily need the finalPath string now. Let's get the TFile reference for the final path.
 			const finalFileRef = this.app.vault.getAbstractFileByPath(finalPath);
@@ -432,7 +445,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 			}
 
 			// 5. Transcription & Note Creation
-			const transcriptionSuccess = await this.runTranscriptionAndCreateNote(fileToProcess, noteTargetParentPath);
+			const transcriptionSuccess = await this.runTranscriptionAndCreateNote(fileToProcess, noteDestination);
 			if (!transcriptionSuccess) {
 				// Error logged within runTranscriptionAndCreateNote, mark job as error
 				this.processingQueue.markAsError(job, 'Transcription or Note creation failed');
@@ -495,74 +508,37 @@ export default class ImageTranscriberPlugin extends Plugin {
 	 * Handles moving the file to the designated image folder, creating it if necessary,
 	 * and checking for duplicates.
 	 * @param fileToMove The file to potentially move (after conversion/compression).
-	 * @returns An object with the final path and the note target path, or null on failure.
+	 * @param targetFolder The folder to move the image to.
+	 * @returns An object with the final path, or null on failure.
 	 */
-	private async handleFileMove(fileToMove: TFile): Promise<{ finalPath: string; noteTargetParentPath: string } | null> {
-		const currentParentPath = getParentFolderPath(fileToMove.path);
-		const imageFolderName = this.settings.imageFolderName || DEFAULT_SETTINGS.imageFolderName;
-		let noteTargetParentPath = currentParentPath;
-		let imagesFolderPath = normalizePath(`${currentParentPath}/${imageFolderName}`);
-		let newImagePath = normalizePath(`${imagesFolderPath}/${fileToMove.name}`);
-		let shouldMoveFile = true;
+	private async handleFileMove(fileToMove: TFile, targetFolder: string): Promise<{ finalPath: string } | null> {
+		const newImagePath = normalizePath(`${targetFolder}/${fileToMove.name}`);
 
-		// Check if dropped directly into an existing 'Images' folder
-		const pathSegments = currentParentPath.split('/');
-		const lastSegment = pathSegments[pathSegments.length - 1];
-
-		if (lastSegment === imageFolderName) {
-			// console.log(`Image already in an '${imageFolderName}' folder: ${currentParentPath}`);
-			imagesFolderPath = currentParentPath;
-			newImagePath = fileToMove.path; // Path remains the same
-			shouldMoveFile = false;
-			noteTargetParentPath = getParentFolderPath(currentParentPath); // Note goes one level up
-			// console.log(`Note will be created in: ${noteTargetParentPath}`);
+		if (newImagePath === fileToMove.path) {
+			// console.log(`Image does not need to be moved. Current path: ${fileToMove.path}`);
+			return { finalPath: fileToMove.path };
 		}
 
 		try {
-			// Ensure the target folder exists (create only if moving)
-			if (shouldMoveFile) {
-				if (!await this.app.vault.adapter.exists(imagesFolderPath)) {
-					// console.log(`Creating '${imageFolderName}' folder at: ${imagesFolderPath}`);
-					await this.app.vault.createFolder(imagesFolderPath);
-				} else {
-					// console.log(`Target folder '${imagesFolderPath}' already exists.`);
-				}
-				// Recalculate newImagePath in case folder name was normalized or changed
-				newImagePath = normalizePath(`${imagesFolderPath}/${fileToMove.name}`);
+			// Check for existing file at the target path before moving
+			const existingImage = this.app.vault.getAbstractFileByPath(newImagePath);
+			if (existingImage && existingImage instanceof TFile) {
+				const warnMsg = `Image named '${fileToMove.name}' already exists in '${targetFolder}'. Skipping transcription.`;
+				console.warn(warnMsg);
+				this.notificationService.notifyError(`Failed to process ${fileToMove.name}: A file with this name already exists in '${targetFolder}'.`);
+				return null; // Indicate failure
 			}
 
-			// Check for existing file at the target path *before* moving/deciding not to move
-			// Important: Compare paths, not just names, to avoid self-comparison if not moving
-			if (newImagePath !== fileToMove.path) {
-				const existingImageInSubfolder = this.app.vault.getAbstractFileByPath(newImagePath);
-				if (existingImageInSubfolder && existingImageInSubfolder instanceof TFile) {
-					const warnMsg = `Image named '${fileToMove.name}' already exists in '${imagesFolderPath}'. Skipping transcription.`;
-					console.warn(warnMsg);
-					// Provide a more informative error message to the user
-					this.notificationService.notifyError(`Failed to process ${fileToMove.name}: A file with this name already exists in '${imageFolderName}'. The original file remains at ${fileToMove.path}.`);
-					return null; // Indicate failure
-				}
-			}
-
-
-			// Move the file only if necessary and paths are different
-			if (shouldMoveFile && fileToMove.path !== newImagePath) {
-				// console.log(`Moving image from ${fileToMove.path} to: ${newImagePath}`);
-				await this.app.fileManager.renameFile(fileToMove, newImagePath);
-				// The fileToMove object's path is updated by renameFile
-				// console.log(`Successfully moved image to: ${fileToMove.path}`);
-				// Return the *updated* path from the file object after rename
-				return { finalPath: fileToMove.path, noteTargetParentPath: noteTargetParentPath };
-			} else {
-				// console.log(`Image does not need to be moved. Current path: ${fileToMove.path}`);
-				// Return the original path as the final path
-				return { finalPath: fileToMove.path, noteTargetParentPath: noteTargetParentPath };
-			}
+			// Move the file
+			// console.log(`Moving image from ${fileToMove.path} to: ${newImagePath}`);
+			await this.app.fileManager.renameFile(fileToMove, newImagePath);
+			// console.log(`Successfully moved image to: ${fileToMove.path}`);
+			return { finalPath: fileToMove.path };
 
 		} catch (moveError) {
-			const errorMsg = `Error during move/folder handling for ${fileToMove.name} targeting '${imagesFolderPath}':`;
+			const errorMsg = `Error during move for ${fileToMove.name} targeting '${newImagePath}':`;
 			console.error(errorMsg, moveError);
-			this.notificationService.notifyError(`Failed to handle file operations for ${fileToMove.name}. Skipping transcription.`);
+			this.notificationService.notifyError(`Failed to move ${fileToMove.name}. Skipping transcription.`);
 			return null; // Indicate failure
 		}
 	}
@@ -576,6 +552,45 @@ export default class ImageTranscriberPlugin extends Plugin {
 		// console.log(`Checking processed paths for final path: ${filePath}`);
 		// console.log(`Current processed paths: ${JSON.stringify(this.settings.processedImagePaths)}`);
 		return this.settings.processedImagePaths.includes(filePath);
+	}
+
+	private determineDestinationPaths(initialFile: TFile): { imageDestination: string, noteDestination: string } {
+		const currentParentPath = getParentFolderPath(initialFile.path);
+
+		// Determine Image Destination
+		let imageDestination: string;
+		if (this.settings.imageDestinationOption === 'specificFolder' && this.settings.specificImageFolderPath) {
+			imageDestination = normalizePath(this.settings.specificImageFolderPath);
+		} else {
+			const imageSubfolderName = this.settings.imageFolderName || DEFAULT_SETTINGS.imageFolderName;
+			imageDestination = normalizePath(`${currentParentPath}/${imageSubfolderName}`);
+		}
+
+		// Determine Note Destination
+		let noteDestination: string;
+		if (this.settings.noteDestinationOption === 'specificFolder' && this.settings.specificNoteFolderPath) {
+			noteDestination = normalizePath(this.settings.specificNoteFolderPath);
+		} else {
+			noteDestination = currentParentPath;
+		}
+
+		return { imageDestination, noteDestination };
+	}
+
+	private async ensureFolderExists(folderPath: string, type: 'image' | 'note'): Promise<void> {
+		if (!folderPath || folderPath === '.' || folderPath === '/') return;
+
+		try {
+			const folderExists = await this.app.vault.adapter.exists(folderPath);
+			if (!folderExists) {
+				// console.log(`Creating ${type} destination folder at: ${folderPath}`);
+				await this.app.vault.createFolder(folderPath);
+			}
+		} catch (error) {
+			console.error(`Error ensuring ${type} folder exists at '${folderPath}':`, error);
+			this.notificationService.notifyError(`Failed to create destination folder for ${type}s. Please check settings and permissions.`);
+			throw error; // Propagate error to stop processing
+		}
 	}
 
 	/**

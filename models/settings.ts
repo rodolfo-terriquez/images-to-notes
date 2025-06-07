@@ -38,6 +38,12 @@ export interface PluginSettings {
     // Add any other settings identified in PRD Section 4.3 if available
     transcribeOnlySpecificFolder: boolean; // New setting
     specificFolderForTranscription: string; // New setting
+
+    // Output destination settings
+    imageDestinationOption: 'subfolder' | 'specificFolder';
+    specificImageFolderPath: string;
+    noteDestinationOption: 'alongside' | 'specificFolder';
+    specificNoteFolderPath: string;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -60,4 +66,10 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     maxConcurrentProcessing: 2, // Default max concurrent processing jobs
     transcribeOnlySpecificFolder: false, // Default for new setting
     specificFolderForTranscription: '', // Default for new setting
+
+    // Output destination defaults
+    imageDestinationOption: 'subfolder',
+    specificImageFolderPath: '',
+    noteDestinationOption: 'alongside',
+    specificNoteFolderPath: '',
 }; 

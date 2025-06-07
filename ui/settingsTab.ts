@@ -231,110 +231,26 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             });
 
         // --- Note Naming ---
-        // Create the note naming setting with vertical layout
-        const noteNamingContainer = containerEl.createDiv({ cls: 'imgtono-vertical-layout-container' });
-        
-        // Add the setting header (name and description)
-        const noteNamingHeader = noteNamingContainer.createDiv({ cls: 'imgtono-setting-item-info' });
-        const noteNamingName = noteNamingHeader.createDiv({ cls: 'imgtono-setting-item-name' });
-        noteNamingName.setText('Note naming convention');
-        const noteNamingDesc = noteNamingHeader.createDiv({ cls: 'imgtono-setting-item-description' });
-        noteNamingDesc.setText('How should the new transcription note be named?');
-        
-        // Add the dropdown below the description
-        const noteNamingControl = noteNamingContainer.createDiv({ cls: 'imgtono-setting-item-control' });
-        const dropdown = new DropdownComponent(noteNamingControl);
-        
-        // Use the enum keys for values and provide user-friendly names
-        dropdown
-            .addOption(NoteNamingOption.FirstLine, 'Use first line of transcription (strips markdown)')
-            .addOption(NoteNamingOption.ImageName, 'Use image name (e.g., ImageName.md)')
-            .addOption(NoteNamingOption.DateImageName, 'Use date + image name (e.g., YYYYMMDD_ImageName.md)')
-            .addOption(NoteNamingOption.FolderDateNum, 'Use folder + date + image name (e.g., Folder_YYYYMMDD_ImageName.md)')
-            .setValue(this.plugin.settings.noteNamingOption)
-            .onChange(async (value) => {
-                this.plugin.settings.noteNamingOption = value as NoteNamingOption;
-                await this.plugin.saveSettings();
-            });
-        dropdown.selectEl.style.width = '100%';
-
-        // --- Image Folder Name Setting with Vertical Layout ---
-        const imageFolderContainer = containerEl.createDiv({ cls: 'imgtono-vertical-layout-container' });
-        
-        const imageFolderHeader = imageFolderContainer.createDiv({ cls: 'imgtono-setting-item-info' });
-        const imageFolderNameLabel = imageFolderHeader.createDiv({ cls: 'imgtono-setting-item-name' });
-        imageFolderNameLabel.setText('Image subfolder name');
-        const imageFolderDesc = imageFolderHeader.createDiv({ cls: 'imgtono-setting-item-description' });
-        imageFolderDesc.setText(
-            'Name of the subfolder (e.g., "Images") where processed images will be moved. ' +
-            'This folder will be created inside the same folder as the original image. ' +
-            'If the image is already in a folder with this name, it will not be moved.'
-        );
-        
-        const imageFolderControl = imageFolderContainer.createDiv({ cls: 'imgtono-setting-item-control' });
-        const imageFolderText = new TextComponent(imageFolderControl);
-        imageFolderText
-            .setPlaceholder(DEFAULT_SETTINGS.imageFolderName) // Use default as placeholder
-            .setValue(this.plugin.settings.imageFolderName)
-            .onChange(async (value) => {
-                this.plugin.settings.imageFolderName = value.trim() || DEFAULT_SETTINGS.imageFolderName; // Ensure it's not empty
-                imageFolderText.setValue(this.plugin.settings.imageFolderName); // Reflect trimmed or default value
-                await this.plugin.saveSettings();
-            });
-        imageFolderText.inputEl.style.width = '100%';
+        this.createNoteNamingSetting(containerEl);
 
         // --- Image Source Control ---
-        containerEl.createEl('h3', { text: 'Image Source Control' });
+        new Setting(containerEl).setName('Image Source Control').setHeading();
+        this.createSourceFolderSetting(containerEl);
 
-        const specificFolderToggleSetting = new Setting(containerEl)
-            .setName('Transcribe only from a specific folder')
-            .setDesc('If enabled, only images added to the selected folder below will be transcribed.')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.transcribeOnlySpecificFolder)
-                .onChange(async (value) => {
-                    this.plugin.settings.transcribeOnlySpecificFolder = value;
-                    await this.plugin.saveSettings();
-                    this.display(); // Re-render to show/hide the folder dropdown
-                }));
+        // --- Output Destination ---
+        new Setting(containerEl).setName('Output Destination').setHeading();
+        this.createImageDestinationSetting(containerEl);
+        this.createNoteDestinationSetting(containerEl);
 
-        if (this.plugin.settings.transcribeOnlySpecificFolder) {
-            const folderSetting = new Setting(containerEl)
-                .setName('Folder for transcription')
-                .setDesc('Choose the folder to monitor for new images.');
-
-            const folderDropdown = new DropdownComponent(folderSetting.controlEl);
-            folderDropdown.addOption('', '-- Select a folder --'); // Default empty option
-
-            const folders = this.app.vault.getAllLoadedFiles().filter(file => file instanceof TFolder) as TFolder[];
-            folders.forEach(folder => {
-                // Add root folder representation if it's the true root
-                if (folder.path === '/') {
-                    folderDropdown.addOption('/', 'Vault Root (/)');
-                } else {
-                    folderDropdown.addOption(folder.path, folder.path);
-                }
-            });
-
-            folderDropdown.setValue(this.plugin.settings.specificFolderForTranscription)
-                .onChange(async (value) => {
-                    this.plugin.settings.specificFolderForTranscription = value;
-                    await this.plugin.saveSettings();
-                });
-            folderDropdown.selectEl.style.width = '100%';
-
-            if (!this.plugin.settings.specificFolderForTranscription && folders.length > 0) {
-                // Optionally add a small warning if the toggle is on but no folder is selected
-                 const warningEl = specificFolderToggleSetting.descEl.createEl('p', {
-                    text: '⚠️ Please select a folder below.',
-                    cls: 'imgtono-setting-warning' 
-                });
-            } else if (folders.length === 0) {
-                folderSetting.setDesc('No folders found in your vault. Create a folder to use this feature.');
-                folderDropdown.setDisabled(true);
-            }
+        // --- Image Folder Name ---
+        // This setting is now conditional, shown only when imageDestinationOption is 'subfolder'
+        if (this.plugin.settings.imageDestinationOption === 'subfolder') {
+            this.createImageFolderNameSetting(containerEl);
         }
 
-        // --- Mobile Optimization Settings ---
+        // --- Mobile Optimizations ---
+        new Setting(containerEl).setName('Mobile Optimizations').setHeading();
+
         new Setting(containerEl)
             .setName('Enable mobile optimization')
             .setDesc('If enabled, the plugin will optimize images for mobile devices.')
@@ -380,5 +296,218 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                         new Notice('Clear history cancelled.');
                     }
                 }));
+    }
+
+    private createFolderSetting(containerEl: HTMLElement, settingName: string, settingDesc: string, value: string, placeholder: string, onChange: (value: string) => Promise<void>): void {
+        let folderInput: TextComponent;
+        const folderSettingContainer = containerEl.createDiv({ cls: 'imgtono-vertical-layout-container' });
+
+        const folderHeader = folderSettingContainer.createDiv({ cls: 'imgtono-setting-item-info' });
+        const folderName = folderHeader.createDiv({ cls: 'imgtono-setting-item-name' });
+        folderName.setText(settingName);
+        const folderDesc = folderHeader.createDiv({ cls: 'imgtono-setting-item-description' });
+        folderDesc.setText(settingDesc);
+
+        const folderControl = folderSettingContainer.createDiv({ cls: 'imgtono-setting-item-control' });
+        folderInput = new TextComponent(folderControl);
+        folderInput
+            .setPlaceholder(placeholder)
+            .setValue(value)
+            .onChange(onChange);
+        folderInput.inputEl.style.width = '100%';
+
+        const folderButtonContainer = folderSettingContainer.createDiv({ cls: 'imgtono-setting-button-row' });
+        new ButtonComponent(folderButtonContainer)
+            .setIcon('reset')
+            .setButtonText('Reset')
+            .onClick(async () => {
+                folderInput.setValue('');
+                await onChange('');
+                new Notice(`${settingName} folder path cleared.`);
+            });
+    }
+
+    private createFolderDropdownSetting(containerEl: HTMLElement, settingName: string, settingDesc: string, value: string, onChange: (value: string) => Promise<void>): void {
+        const folderSettingContainer = containerEl.createDiv({ cls: 'imgtono-vertical-layout-container' });
+
+        const folderHeader = folderSettingContainer.createDiv({ cls: 'imgtono-setting-item-info' });
+        folderHeader.createDiv({ cls: 'imgtono-setting-item-name' }).setText(settingName);
+        folderHeader.createDiv({ cls: 'imgtono-setting-item-description' }).setText(settingDesc);
+
+        const folderControl = folderSettingContainer.createDiv({ cls: 'imgtono-setting-item-control' });
+        const dropdown = new DropdownComponent(folderControl);
+        dropdown.addOption('', '-- Select a folder --');
+
+        const folders = this.app.vault.getAllLoadedFiles().filter(file => file instanceof TFolder) as TFolder[];
+        folders.forEach(folder => {
+            dropdown.addOption(folder.path, folder.path === '/' ? 'Vault Root (/)' : folder.path);
+        });
+
+        dropdown.setValue(value).onChange(onChange);
+        dropdown.selectEl.style.width = '100%';
+
+        if (!value && folders.length > 0) {
+            const warningEl = folderHeader.createEl('p', {
+                text: '⚠️ Please select a folder.',
+                cls: 'imgtono-setting-warning'
+            });
+        } else if (folders.length === 0) {
+            folderHeader.createEl('p', {
+                text: 'No folders found in your vault. Create a folder to use this feature.',
+                cls: 'imgtono-setting-warning'
+            });
+            dropdown.setDisabled(true);
+        }
+    }
+
+    private createImageDestinationSetting(containerEl: HTMLElement): void {
+        const imageDestContainer = containerEl.createDiv({ cls: 'imgtono-vertical-layout-container' });
+        const imageDestHeader = imageDestContainer.createDiv({ cls: 'imgtono-setting-item-info' });
+        imageDestHeader.createDiv({ cls: 'imgtono-setting-item-name' }).setText('Image destination');
+        imageDestHeader.createDiv({ cls: 'imgtono-setting-item-description' }).setText('Where should processed images be saved?');
+
+        const imageDestControl = imageDestContainer.createDiv({ cls: 'imgtono-setting-item-control' });
+        const imageDestDropdown = new DropdownComponent(imageDestControl);
+        imageDestDropdown
+            .addOption('subfolder', 'Create a subfolder in the current folder (default)')
+            .addOption('specificFolder', 'Save to a specific folder')
+            .setValue(this.plugin.settings.imageDestinationOption)
+            .onChange(async (value) => {
+                this.plugin.settings.imageDestinationOption = value as 'subfolder' | 'specificFolder';
+                await this.plugin.saveSettings();
+                this.display();
+            });
+
+        if (this.plugin.settings.imageDestinationOption === 'specificFolder') {
+            this.createFolderDropdownSetting(
+                imageDestContainer,
+                'Specific image folder path',
+                'The path to the folder for processed images (e.g., Assets/Images).',
+                this.plugin.settings.specificImageFolderPath,
+                async (value) => {
+                    this.plugin.settings.specificImageFolderPath = value;
+                    await this.plugin.saveSettings();
+                }
+            );
+        }
+    }
+
+    private createNoteDestinationSetting(containerEl: HTMLElement): void {
+        const noteDestContainer = containerEl.createDiv({ cls: 'imgtono-vertical-layout-container' });
+        const noteDestHeader = noteDestContainer.createDiv({ cls: 'imgtono-setting-item-info' });
+        noteDestHeader.createDiv({ cls: 'imgtono-setting-item-name' }).setText('Note destination');
+        noteDestHeader.createDiv({ cls: 'imgtono-setting-item-description' }).setText('Where should new transcription notes be created?');
+
+        const noteDestControl = noteDestContainer.createDiv({ cls: 'imgtono-setting-item-control' });
+        const noteDestDropdown = new DropdownComponent(noteDestControl);
+        noteDestDropdown
+            .addOption('alongside', 'Alongside the original image\'s location (default)')
+            .addOption('specificFolder', 'Save to a specific folder')
+            .setValue(this.plugin.settings.noteDestinationOption)
+            .onChange(async (value) => {
+                this.plugin.settings.noteDestinationOption = value as 'alongside' | 'specificFolder';
+                await this.plugin.saveSettings();
+                this.display();
+            });
+
+        if (this.plugin.settings.noteDestinationOption === 'specificFolder') {
+            this.createFolderDropdownSetting(
+                noteDestContainer,
+                'Specific note folder path',
+                'The path to the folder for new notes (e.g., Inbox/Transcriptions).',
+                this.plugin.settings.specificNoteFolderPath,
+                async (value) => {
+                    this.plugin.settings.specificNoteFolderPath = value;
+                    await this.plugin.saveSettings();
+                }
+            );
+        }
+    }
+
+    private createImageFolderNameSetting(containerEl: HTMLElement): void {
+        let folderNameInput: TextComponent;
+        const folderNameContainer = containerEl.createDiv({ cls: 'imgtono-vertical-layout-container' });
+
+        const folderNameHeader = folderNameContainer.createDiv({ cls: 'imgtono-setting-item-info' });
+        folderNameHeader.createDiv({ cls: 'imgtono-setting-item-name' }).setText('Processed image folder name');
+        folderNameHeader.createDiv({ cls: 'imgtono-setting-item-description' }).setText("Name of the subfolder where processed images will be saved (e.g., 'Images').");
+
+        const folderNameControl = folderNameContainer.createDiv({ cls: 'imgtono-setting-item-control' });
+        folderNameInput = new TextComponent(folderNameControl);
+        folderNameInput
+            .setPlaceholder(DEFAULT_SETTINGS.imageFolderName)
+            .setValue(this.plugin.settings.imageFolderName)
+            .onChange(async (value) => {
+                this.plugin.settings.imageFolderName = value.trim() || DEFAULT_SETTINGS.imageFolderName;
+                await this.plugin.saveSettings();
+                folderNameInput.setValue(this.plugin.settings.imageFolderName); // Ensure UI reflects the possibly defaulted value
+            });
+        folderNameInput.inputEl.style.width = '100%';
+
+        const folderNameButtonContainer = folderNameContainer.createDiv({ cls: 'imgtono-setting-button-row' });
+        new ButtonComponent(folderNameButtonContainer)
+            .setIcon('reset')
+            .setButtonText('Reset to default')
+            .onClick(async () => {
+                this.plugin.settings.imageFolderName = DEFAULT_SETTINGS.imageFolderName;
+                folderNameInput.setValue(this.plugin.settings.imageFolderName);
+                await this.plugin.saveSettings();
+                new Notice('Image folder name reset to default.');
+            });
+    }
+
+    private createNoteNamingSetting(containerEl: HTMLElement): void {
+        // Create the note naming setting with vertical layout
+        const noteNamingContainer = containerEl.createDiv({ cls: 'imgtono-vertical-layout-container' });
+        
+        // Add the setting header (name and description)
+        const noteNamingHeader = noteNamingContainer.createDiv({ cls: 'imgtono-setting-item-info' });
+        const noteNamingName = noteNamingHeader.createDiv({ cls: 'imgtono-setting-item-name' });
+        noteNamingName.setText('Note naming convention');
+        const noteNamingDesc = noteNamingHeader.createDiv({ cls: 'imgtono-setting-item-description' });
+        noteNamingDesc.setText('How should the new transcription note be named?');
+        
+        // Add the dropdown below the description
+        const noteNamingControl = noteNamingContainer.createDiv({ cls: 'imgtono-setting-item-control' });
+        const dropdown = new DropdownComponent(noteNamingControl);
+        
+        // Use the enum keys for values and provide user-friendly names
+        dropdown
+            .addOption(NoteNamingOption.FirstLine, 'Use first line of transcription (strips markdown)')
+            .addOption(NoteNamingOption.ImageName, 'Use image name (e.g., ImageName.md)')
+            .addOption(NoteNamingOption.DateImageName, 'Use date + image name (e.g., YYYYMMDD_ImageName.md)')
+            .addOption(NoteNamingOption.FolderDateNum, 'Use folder + date + image name (e.g., Folder_YYYYMMDD_ImageName.md)')
+            .setValue(this.plugin.settings.noteNamingOption)
+            .onChange(async (value) => {
+                this.plugin.settings.noteNamingOption = value as NoteNamingOption;
+                await this.plugin.saveSettings();
+            });
+        dropdown.selectEl.style.width = '100%';
+    }
+
+    private createSourceFolderSetting(containerEl: HTMLElement): void {
+        const setting = new Setting(containerEl)
+            .setName('Transcribe only from a specific folder')
+            .setDesc('If enabled, only images added to the selected folder below will be transcribed.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.transcribeOnlySpecificFolder)
+                .onChange(async (value) => {
+                    this.plugin.settings.transcribeOnlySpecificFolder = value;
+                    await this.plugin.saveSettings();
+                    this.display(); 
+                }));
+
+        if (this.plugin.settings.transcribeOnlySpecificFolder) {
+            this.createFolderDropdownSetting(
+                containerEl,
+                'Folder for transcription',
+                'Choose the folder to monitor for new images.',
+                this.plugin.settings.specificFolderForTranscription,
+                async (value) => {
+                    this.plugin.settings.specificFolderForTranscription = value;
+                    await this.plugin.saveSettings();
+                }
+            );
+        }
     }
 } 
