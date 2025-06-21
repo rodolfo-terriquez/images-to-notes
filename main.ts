@@ -21,6 +21,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 	private isMobileDevice: boolean = false;
 
 	async onload() {
+		// console.time('ImageTranscriberPlugin onload');
 		// console.log('Loading Images to notes Plugin');
 		await this.loadSettings();
 
@@ -28,150 +29,144 @@ export default class ImageTranscriberPlugin extends Plugin {
 		this.isMobileDevice = Platform.isMobile;
 
 		this.notificationService = new NotificationService(this.settings);
-		this.aiService = new AIService(this.settings, this.notificationService, this.app);
-		this.noteCreator = new NoteCreator(this.settings, this.notificationService, this.app);
-		this.processingQueue = new ProcessingQueue();
-
-		this.processingQueue.setProcessCallback(this.processImageFile.bind(this));
-
-    this.registerEvent(
-      this.app.workspace.on('file-menu', (menu: Menu, file) => {
-        // Check if the file is a folder
-        if (file instanceof TFolder) {
-          menu.addItem((item) => {
-            item
-              .setTitle('New image to note')
-              .setIcon('image-file') // Or any other relevant icon
-              .setSection('action-primary')
-              .onClick(async () => {
-                const targetFolder = file as TFolder;
-                new Notice(`Select images to add to folder: ${targetFolder.path}`);
-
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*';
-                input.multiple = true;
-
-                input.onchange = async (event) => {
-                  const M_inputElement = event.target as HTMLInputElement;
-                  const selectedFiles = M_inputElement.files;
-
-                  if (!selectedFiles || selectedFiles.length === 0) {
-                    new Notice('No files selected or photo not captured successfully.');
-                    if (M_inputElement) M_inputElement.value = ''; // Reset to allow retry
-                    return;
-                  }
-
-                  // Determine if any notices about the import/queue process should be shown at all for this batch
-                  let showBatchImportNotice = true;
-                  if (this.settings.transcribeOnlySpecificFolder) {
-                    const specificFolderSetting = this.settings.specificFolderForTranscription;
-                    if (!specificFolderSetting) {
-                        showBatchImportNotice = false; // No specific folder selected, so no processing will occur
-                    } else {
-                        let normalizedSpecificFolder = normalizePath(specificFolderSetting);
-                        if (normalizedSpecificFolder === '.') normalizedSpecificFolder = '/';
-                        let normalizedTargetFolderPath = normalizePath(targetFolder.path);
-                        if (normalizedTargetFolderPath === '.') normalizedTargetFolderPath = '/';
-
-                        if (normalizedTargetFolderPath !== normalizedSpecificFolder) {
-                            showBatchImportNotice = false; // Target folder is not the designated one
-                        }
-                    }
-                  }
-
-                  if (showBatchImportNotice) {
-                    new Notice(`Importing ${selectedFiles.length} image(s) to ${targetFolder.name}...`);
-                  }
-
-                  for (const browserFile of Array.from(selectedFiles)) {
-                   const fileName = browserFile.name;
-                   const destinationPath = normalizePath(`${targetFolder.path}/${fileName}`);
-                   if (this.processingPaths.has(destinationPath)) { // Check if already being processed by another mechanism
-                        new Notice(`File ${fileName} is already being processed. Skipped.`);
-                        continue;
-                   }
-
-                   try {
-                     this.processingPaths.add(destinationPath); // Mark as being processed by this action
-
-                     const arrayBuffer = await browserFile.arrayBuffer();
-
-                     const existingFile = this.app.vault.getAbstractFileByPath(destinationPath);
-                     if (existingFile) {
-                       new Notice(`File ${fileName} already exists in ${targetFolder.name}. Skipped.`);
-                       continue;
-                     }
-
-                     const tFile = await this.app.vault.createBinary(destinationPath, arrayBuffer);
-
-                     if (tFile instanceof TFile && isImageFile(tFile)) {
-												// --- Folder-Specific Transcription Check for file-menu ---
-												let shouldQueue = true;
-												if (this.settings.transcribeOnlySpecificFolder) {
-														const specificFolderSetting = this.settings.specificFolderForTranscription;
-														if (!specificFolderSetting) {
-																shouldQueue = false; // No folder selected, don't queue
-																// console.log('Specific folder transcription ON, but no folder selected. Not queueing imported file.');
-														} else {
-																let normalizedSpecificFolder = normalizePath(specificFolderSetting);
-																if (normalizedSpecificFolder === '.') normalizedSpecificFolder = '/';
-
-																// targetFolder is a TFolder, its path is already the parent folder path
-																let normalizedTargetFolderPath = normalizePath(targetFolder.path);
-																if (normalizedTargetFolderPath === '.') normalizedTargetFolderPath = '/';
-																
-																if (normalizedTargetFolderPath !== normalizedSpecificFolder) {
-																		shouldQueue = false;
-																		// console.log(`Imported file ${fileName} to ${targetFolder.name}, which is not the designated transcription folder "${specificFolderSetting}". Not queueing.`);
-																		this.notificationService.notifyVerbose(`Imported ${fileName} to ${targetFolder.name}, but it's not the designated transcription folder. Not queueing.`);
-																}
-														}
-												}
-												// --- End Folder-Specific Transcription Check ---
-
-												if (shouldQueue) {
-                                     new Notice(`Imported ${fileName} to ${targetFolder.name}.`); 
-														this.processingQueue.addToQueue(tFile);
-														new Notice(`Added ${fileName} to transcription queue.`);
-												} // else: No notice if shouldQueue is false (due to folder settings)
-                     } else {
-                       // This notice is about the file itself being problematic, not about queueing policy.
-                       // Show it if the initial batch import notice was also shown, to avoid orphaned messages.
-                       if (showBatchImportNotice) {
-                            new Notice(`Imported ${fileName} to ${targetFolder.name}, but it's not a recognized image or failed to queue.`);
-                       }
-                     }
-                   } catch (error) {
-                     console.error(`Error importing file ${fileName}:`, error);
-                     new Notice(`Failed to import ${fileName}. Check console for details.`);
-                   } finally {
-                     this.processingPaths.delete(destinationPath); // Clean up the flag
-                   }
-                 }
-                 // Reset input after all files are processed or loop finishes
-                 if (M_inputElement) M_inputElement.value = '';
-                };
-
-                input.click();
-              });
-          });
-        }
-      })
-    );
-
+		
 		this.addSettingTab(new TranscriptionSettingTab(this.app, this));
 
-		// Defer the 'create' event registration until the layout is ready
+		// Defer heavy initializations and event registrations until layout is ready
 		this.app.workspace.onLayoutReady(() => {
-			// console.log('Workspace layout ready. Registering vault "create" event listener.');
-			this.isReady = true; // Can set readiness flag here if still needed elsewhere
+			// console.log('Workspace layout ready.');
+
+			// Initialize services and queue here
+			this.aiService = new AIService(this.settings, this.notificationService, this.app);
+			this.noteCreator = new NoteCreator(this.settings, this.notificationService, this.app);
+			this.processingQueue = new ProcessingQueue();
+			this.processingQueue.setProcessCallback(this.processImageFile.bind(this));
+
+			// Register vault event listeners now that the queue is ready
 			this.registerEvent(
 				this.app.vault.on('create', this.handleFileCreate.bind(this))
 			);
+			
+			this.registerEvent(
+				this.app.workspace.on('file-menu', (menu: Menu, file) => {
+					if (file instanceof TFolder) {
+						menu.addItem((item) => {
+							item
+								.setTitle('New image to note')
+								.setIcon('image-file')
+								.setSection('action-primary')
+								.onClick(async () => {
+									const targetFolder = file as TFolder;
+									new Notice(`Select images to add to folder: ${targetFolder.path}`);
+			
+									const input = document.createElement('input');
+									input.type = 'file';
+									input.accept = 'image/*';
+									input.multiple = true;
+			
+									input.onchange = async (event) => {
+										const M_inputElement = event.target as HTMLInputElement;
+										const selectedFiles = M_inputElement.files;
+			
+										if (!selectedFiles || selectedFiles.length === 0) {
+											new Notice('No files selected or photo not captured successfully.');
+											if (M_inputElement) M_inputElement.value = ''; // Reset to allow retry
+											return;
+										}
+			
+										let showBatchImportNotice = true;
+										if (this.settings.transcribeOnlySpecificFolder) {
+											const specificFolderSetting = this.settings.specificFolderForTranscription;
+											if (!specificFolderSetting) {
+												showBatchImportNotice = false;
+											} else {
+												let normalizedSpecificFolder = normalizePath(specificFolderSetting);
+												if (normalizedSpecificFolder === '.') normalizedSpecificFolder = '/';
+												let normalizedTargetFolderPath = normalizePath(targetFolder.path);
+												if (normalizedTargetFolderPath === '.') normalizedTargetFolderPath = '/';
+			
+												if (normalizedTargetFolderPath !== normalizedSpecificFolder) {
+													showBatchImportNotice = false;
+												}
+											}
+										}
+			
+										if (showBatchImportNotice) {
+											new Notice(`Importing ${selectedFiles.length} image(s) to ${targetFolder.name}...`);
+										}
+			
+										for (const browserFile of Array.from(selectedFiles)) {
+											const fileName = browserFile.name;
+											const destinationPath = normalizePath(`${targetFolder.path}/${fileName}`);
+											if (this.processingPaths.has(destinationPath)) {
+												new Notice(`File ${fileName} is already being processed. Skipped.`);
+												continue;
+											}
+			
+											try {
+												this.processingPaths.add(destinationPath);
+			
+												const arrayBuffer = await browserFile.arrayBuffer();
+			
+												const existingFile = this.app.vault.getAbstractFileByPath(destinationPath);
+												if (existingFile) {
+													new Notice(`File ${fileName} already exists in ${targetFolder.name}. Skipped.`);
+													continue;
+												}
+			
+												const tFile = await this.app.vault.createBinary(destinationPath, arrayBuffer);
+			
+												if (tFile instanceof TFile && isImageFile(tFile)) {
+													let shouldQueue = true;
+													if (this.settings.transcribeOnlySpecificFolder) {
+														const specificFolderSetting = this.settings.specificFolderForTranscription;
+														if (!specificFolderSetting) {
+															shouldQueue = false;
+														} else {
+															let normalizedSpecificFolder = normalizePath(specificFolderSetting);
+															if (normalizedSpecificFolder === '.') normalizedSpecificFolder = '/';
+			
+															let normalizedTargetFolderPath = normalizePath(targetFolder.path);
+															if (normalizedTargetFolderPath === '.') normalizedTargetFolderPath = '/';
+															
+															if (normalizedTargetFolderPath !== normalizedSpecificFolder) {
+																shouldQueue = false;
+																this.notificationService.notifyVerbose(`Imported ${fileName} to ${targetFolder.name}, but it's not the designated transcription folder. Not queueing.`);
+															}
+														}
+													}
+			
+													if (shouldQueue) {
+														new Notice(`Imported ${fileName} to ${targetFolder.name}.`); 
+														this.processingQueue.addToQueue(tFile);
+														new Notice(`Added ${fileName} to transcription queue.`);
+													}
+												} else {
+													if (showBatchImportNotice) {
+														new Notice(`Imported ${fileName} to ${targetFolder.name}, but it's not a recognized image or failed to queue.`);
+													}
+												}
+											} catch (error) {
+												console.error(`Error importing file ${fileName}:`, error);
+												new Notice(`Failed to import ${fileName}. Check console for details.`);
+											} finally {
+												this.processingPaths.delete(destinationPath);
+											}
+										}
+										if (M_inputElement) M_inputElement.value = '';
+									};
+			
+									input.click();
+								});
+						});
+					}
+				})
+			);
+
+			this.isReady = true;
 		});
 
-		// Listen for drops onto the editor - register immediately
+		// Listen for drops onto the editor - this can be registered immediately
 		this.registerEvent(
 			this.app.workspace.on('editor-drop', this.handleEditorDrop.bind(this))
 		);
@@ -182,6 +177,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 			this.initializeMobileSupport();
 		}
 
+		//console.timeEnd('ImageTranscriberPlugin onload');
 		// console.log('Images to notes Plugin loaded. File watcher registration deferred until layout ready.');
 	}
 
