@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-image-transcriber",
-	"version": "1.0.4",
+	"version": "1.0.7",
 	"description": "Transcribes text from images using AI.",
 	"main": "main.js",
 	"type": "module",
