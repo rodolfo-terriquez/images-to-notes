@@ -233,6 +233,19 @@ export class TranscriptionSettingTab extends PluginSettingTab {
         // --- Note Naming ---
         this.createNoteNamingSetting(containerEl);
 
+        // --- Note Content ---
+        new Setting(containerEl).setName('Note Content').setHeading();
+        
+        new Setting(containerEl)
+            .setName('Include image in note')
+            .setDesc('If enabled, the processed image will be linked at the bottom of each transcribed note.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.includeImageInNote)
+                .onChange(async (value) => {
+                    this.plugin.settings.includeImageInNote = value;
+                    await this.plugin.saveSettings();
+                }));
+
         // --- Image Source Control ---
         new Setting(containerEl).setName('Image Source Control').setHeading();
         this.createSourceFolderSetting(containerEl);

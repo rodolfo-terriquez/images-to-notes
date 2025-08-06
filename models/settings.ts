@@ -44,6 +44,9 @@ export interface PluginSettings {
     specificImageFolderPath: string;
     noteDestinationOption: 'alongside' | 'specificFolder';
     specificNoteFolderPath: string;
+    
+    // Note content settings
+    includeImageInNote: boolean; // Whether to include the image link in the note
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -72,4 +75,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     specificImageFolderPath: '',
     noteDestinationOption: 'alongside',
     specificNoteFolderPath: '',
+    
+    // Note content defaults
+    includeImageInNote: true, // Include image by default (user can toggle off)
 }; 

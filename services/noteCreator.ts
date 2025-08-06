@@ -34,9 +34,12 @@ export class NoteCreator {
             const folderPath = noteTargetParentPath;
             const uniqueNotePath = await this._findUniqueNotePath(folderPath, title);
 
-            // Generate markdown link relative to the vault root
-            const imageLink = this.app.fileManager.generateMarkdownLink(imageFile, '/');
-            const noteContent = `${transcription.trim()}\n\n${imageLink}`;
+            // Conditionally include image link based on settings
+            let noteContent = transcription.trim();
+            if (this.settings.includeImageInNote) {
+                const imageLink = this.app.fileManager.generateMarkdownLink(imageFile, '/');
+                noteContent += `\n\n${imageLink}`;
+            }
 
             const newNoteFile = await this.app.vault.create(uniqueNotePath, noteContent);
             this.notificationService.notifySuccess(`Note created: ${newNoteFile.basename}`);
