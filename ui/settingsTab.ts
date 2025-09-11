@@ -1,22 +1,31 @@
 import { App, PluginSettingTab, Setting, TextAreaComponent, DropdownComponent, TextComponent, Notice, ButtonComponent, TFolder } from 'obsidian';
 import ImageTranscriberPlugin from '../main'; // Corrected import
-import { ApiProvider, OpenAiModel, AnthropicModel, GoogleModel, DEFAULT_SETTINGS, NoteNamingOption } from '../models/settings'; // Import relevant types AND DEFAULTS AND NoteNamingOption
+import { ApiProvider, OpenAiModel, AnthropicModel, GoogleModel, MistralModel, DEFAULT_SETTINGS, NoteNamingOption, TranscriptionPlacement } from '../models/settings'; // Import relevant types AND DEFAULTS AND NoteNamingOption
 
 // Define available models - These should match the types in settings.ts
 const OPENAI_MODELS: Record<OpenAiModel, string> = {
     'gpt-4.1': 'GPT-4.1',
     'gpt-4.1-mini': 'GPT-4.1 Mini',
     'o4-mini': 'o4 Mini',
+    'gpt-5-2025-08-07': 'GPT-5',
+    'gpt-5-mini-2025-08-07': 'GPT-5 Mini'
 };
 
 const ANTHROPIC_MODELS: Record<AnthropicModel, string> = {
-    'claude-3-5-sonnet-latest': 'Claude 3.5 Sonnet',
-    'claude-3-7-sonnet-latest': 'Claude 3.7 Sonnet',
+    'claude-3-7-sonnet-latest': 'Claude Sonnet 3.7',
     'claude-sonnet-4-0': 'Claude Sonnet 4.0',
 };
 
 const GOOGLE_MODELS: Record<GoogleModel, string> = {
     'gemini-2.0-flash': 'Gemini 2.0 Flash',
+    'gemini-2.5-flash': 'Gemini 2.5 Flash',
+    'gemini-2.5-flash-lite': 'Gemini 2.5 Flash Lite',
+};
+
+const MISTRAL_MODELS: Record<MistralModel, string> = {
+    'mistral-ocr-2505': 'Mistral OCR 2505',
+    'mistral-small-2503': 'Mistral Small 3.1',
+    'mistral-medium-2508': 'Mistral Medium 3.1',
 };
 
 export class TranscriptionSettingTab extends PluginSettingTab {
@@ -40,6 +49,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                 .addOption(ApiProvider.OpenAI, 'OpenAI')
                 .addOption(ApiProvider.Anthropic, 'Anthropic')
                 .addOption(ApiProvider.Google, 'Google')
+                .addOption(ApiProvider.Mistral, 'Mistral')
                 .setValue(this.plugin.settings.provider)
                 .onChange(async (value) => {
                     this.plugin.settings.provider = value as ApiProvider;
@@ -64,6 +74,18 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
                     .inputEl.setAttribute('type', 'password')); // Mask the key
+
+            // OpenAI Base URL
+            new Setting(containerEl)
+                .setName('OpenAI Base URL')
+                .setDesc('Set a custom base URL for the OpenAI API. Defaults to https://api.openai.com.')
+                .addText(text => text
+                    .setPlaceholder('https://api.openai.com')
+                    .setValue(this.plugin.settings.openaiBaseUrl)
+                    .onChange(async (value) => {
+                        this.plugin.settings.openaiBaseUrl = value.trim();
+                        await this.plugin.saveSettings();
+                    }));
 
             // OpenAI Model
             new Setting(containerEl)
@@ -151,6 +173,38 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
             if (!this.plugin.settings.googleApiKey) {
                  providerDesc.createEl('p', { text: '⚠️ Google API key is required.', cls: 'imgtono-setting-warning' });
+            }
+        } else if (this.plugin.settings.provider === ApiProvider.Mistral) {
+            // Mistral API Key
+            new Setting(containerEl)
+                .setName('Mistral API key')
+                .setDesc('Enter your Mistral API key.')
+                .addText(text => text
+                    .setPlaceholder('mistral-...')
+                    .setValue(this.plugin.settings.mistralApiKey)
+                    .onChange(async (value) => {
+                        this.plugin.settings.mistralApiKey = value.trim();
+                        await this.plugin.saveSettings();
+                    })
+                    .inputEl.setAttribute('type', 'password')); // Mask the key
+
+            // Mistral Model
+            new Setting(containerEl)
+                .setName('Mistral model')
+                .setDesc('Select the Mistral model to use.')
+                .addDropdown(dropdown => {
+                    for (const modelId in MISTRAL_MODELS) {
+                        dropdown.addOption(modelId, MISTRAL_MODELS[modelId as MistralModel]);
+                    }
+                    dropdown.setValue(this.plugin.settings.mistralModel);
+                    dropdown.onChange(async (value) => {
+                        this.plugin.settings.mistralModel = value as MistralModel;
+                        await this.plugin.saveSettings();
+                    });
+                });
+
+            if (!this.plugin.settings.mistralApiKey) {
+                providerDesc.createEl('p', { text: '⚠️ Mistral API key is required.', cls: 'imgtono-setting-warning' });
             }
         }
 
@@ -243,6 +297,18 @@ export class TranscriptionSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.includeImageInNote)
                 .onChange(async (value) => {
                     this.plugin.settings.includeImageInNote = value;
+                    await this.plugin.saveSettings();
+                }));
+        
+        new Setting(containerEl)
+            .setName('Transcription placement')
+            .setDesc('Choose where to place the transcription relative to the image.')
+            .addDropdown(dropdown => dropdown
+                .addOption(TranscriptionPlacement.AboveImage, 'Above image')
+                .addOption(TranscriptionPlacement.BelowImage, 'Below image')
+                .setValue(this.plugin.settings.transcriptionPlacement)
+                .onChange(async (value) => {
+                    this.plugin.settings.transcriptionPlacement = value as TranscriptionPlacement;
                     await this.plugin.saveSettings();
                 }));
 

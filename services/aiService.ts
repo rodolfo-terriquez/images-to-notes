@@ -1,13 +1,13 @@
 import { App, requestUrl, RequestUrlParam, RequestUrlResponse, TFile } from 'obsidian';
-import { PluginSettings, OpenAiModel, AnthropicModel, GoogleModel } from '../models/settings';
+import { PluginSettings, OpenAiModel, AnthropicModel, GoogleModel, MistralModel } from '../models/settings';
 import { NotificationService } from '../ui/notificationService';
 import { encodeImageToBase64 } from '../utils/fileUtils';
 
 // Constants for API endpoints and headers
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
 const GOOGLE_API_URL = 'https://generativelanguage.googleapis.com/v1/models';
+const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
 
 export class AIService {
     constructor(
@@ -34,7 +34,7 @@ export class AIService {
         }
 
         // 2. Determine provider and settings
-        const { provider, openaiApiKey, anthropicApiKey, googleApiKey, openaiModel, anthropicModel, googleModel, systemPrompt, userPrompt } = this.settings;
+        const { provider, openaiApiKey, anthropicApiKey, googleApiKey, mistralApiKey, openaiModel, anthropicModel, googleModel, mistralModel, systemPrompt, userPrompt, openaiBaseUrl } = this.settings;
         const imageUrl = base64ImageWithPrefix; // Use the data URI
 
         // 3. Call appropriate API
@@ -44,7 +44,7 @@ export class AIService {
                     this.notificationService.notifyError('OpenAI API key is missing.');
                     return null;
                 }
-                return await this._transcribeWithOpenAI(imageUrl, systemPrompt, userPrompt, openaiApiKey, openaiModel);
+                return await this._transcribeWithOpenAI(imageUrl, systemPrompt, userPrompt, openaiApiKey, openaiModel, openaiBaseUrl);
             } else if (provider === 'anthropic') {
                 if (!anthropicApiKey) {
                     this.notificationService.notifyError('Anthropic API key is missing.');
@@ -73,6 +73,12 @@ export class AIService {
                 }
                 const mediaType = mediaTypeMatch[1];
                 return await this._transcribeWithGoogle(base64Data, mediaType, systemPrompt, userPrompt, googleApiKey, googleModel);
+            } else if (provider === 'mistral') {
+                if (!mistralApiKey) {
+                    this.notificationService.notifyError('Mistral API key is missing.');
+                    return null;
+                }
+                return await this._transcribeWithMistral(imageUrl, systemPrompt, userPrompt, mistralApiKey, mistralModel);
             } else {
                 this.notificationService.notifyError(`Unsupported AI provider selected: ${provider}`);
                 return null;
@@ -100,7 +106,8 @@ export class AIService {
         systemPrompt: string,
         userPrompt: string,
         apiKey: string,
-        model: OpenAiModel
+        model: OpenAiModel,
+        baseUrl: string
     ): Promise<string | null> {
         // console.log(`Transcribing with OpenAI (${model})...`);
         this.notificationService.notifyVerbose(`Sending image to OpenAI (${model})...`);
@@ -127,7 +134,7 @@ export class AIService {
         };
 
         const requestParams: RequestUrlParam = {
-            url: OPENAI_API_URL,
+            url: `${baseUrl}/v1/chat/completions`,
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
@@ -306,6 +313,75 @@ export class AIService {
         } catch (error) {
             console.error('Error calling Google Gemini API:', error);
             // Re-throw the error to be caught by the main transcribeImage method
+            throw error; 
+        }
+    }
+
+    /**
+     * Calls the Mistral API to transcribe the image.
+     */
+    private async _transcribeWithMistral(
+        imageUrl: string, // Expects data URI
+        systemPrompt: string,
+        userPrompt: string,
+        apiKey: string,
+        model: MistralModel
+    ): Promise<string | null> {
+        this.notificationService.notifyVerbose(`Sending image to Mistral (${model})...`);
+        const startTime = Date.now();
+
+        const requestBody = {
+            model: model,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: userPrompt },
+                        {
+                            type: 'image_url',
+                            image_url: {
+                                url: imageUrl,
+                            },
+                        },
+                    ],
+                },
+            ],
+            max_tokens: 4000,
+        };
+
+        const requestParams: RequestUrlParam = {
+            url: MISTRAL_API_URL,
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+            throw: false,
+        };
+
+        try {
+            const response = await requestUrl(requestParams);
+            
+            if (response.status >= 200 && response.status < 300) {
+                const data = response.json;
+                const transcription = data?.choices?.[0]?.message?.content;
+                if (transcription) {
+                    const endTime = Date.now();
+                    this.notificationService.notifyVerbose(`Mistral Response received (${(endTime - startTime) / 1000}s).`);
+                    return transcription.trim();
+                } else {
+                    console.error('Mistral response missing transcription content:', data);
+                    throw new Error('Invalid response format from Mistral.');
+                }
+            } else {
+                 console.error(`Mistral API Error (${response.status}):`, response.text);
+                 let errorDetails = response.json?.error?.message || response.text || `HTTP status ${response.status}`;
+                 throw new Error(`Mistral API error: ${errorDetails}`);
+            }
+        } catch (error) {
+            console.error('Error calling Mistral API:', error);
             throw error; 
         }
     }

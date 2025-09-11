@@ -1,5 +1,5 @@
 import { App, TFile, normalizePath, FileSystemAdapter } from 'obsidian';
-import { PluginSettings, NoteNamingOption } from '../models/settings';
+import { PluginSettings, NoteNamingOption, TranscriptionPlacement } from '../models/settings';
 import { NotificationService } from '../ui/notificationService';
 import { getParentFolderPath, sanitizeFilename, getFormattedDate } from '../utils/fileUtils';
 
@@ -34,11 +34,16 @@ export class NoteCreator {
             const folderPath = noteTargetParentPath;
             const uniqueNotePath = await this._findUniqueNotePath(folderPath, title);
 
-            // Conditionally include image link based on settings
             let noteContent = transcription.trim();
             if (this.settings.includeImageInNote) {
                 const imageLink = this.app.fileManager.generateMarkdownLink(imageFile, '/');
-                noteContent += `\n\n${imageLink}`;
+                if (this.settings.transcriptionPlacement === TranscriptionPlacement.AboveImage) {
+                    noteContent = `${transcription.trim()}\n\n${imageLink}`;
+                } else { // BelowImage
+                    noteContent = `${imageLink}\n\n${transcription.trim()}`;
+                }
+            } else {
+                noteContent = transcription.trim();
             }
 
             const newNoteFile = await this.app.vault.create(uniqueNotePath, noteContent);
