@@ -8,7 +8,7 @@ export enum ApiProvider {
 
 // Specific model types for better type safety
 export type OpenAiModel = "gpt-4.1" | "gpt-4.1-mini" | "o4-mini" | "gpt-5-2025-08-07" | "gpt-5-mini-2025-08-07";
-export type AnthropicModel = "claude-3-7-sonnet-latest" | "claude-sonnet-4-0";
+export type AnthropicModel = "claude-3-7-sonnet-latest" | "claude-sonnet-4-0" | "claude-sonnet-4-5" | "claude-haiku-4-5";
 export type GoogleModel = "gemini-2.0-flash" | "gemini-2.5-flash" | "gemini-2.5-flash-lite";
 export type MistralModel = "mistral-ocr-2505" | "mistral-small-2503" | "mistral-medium-2508";
 

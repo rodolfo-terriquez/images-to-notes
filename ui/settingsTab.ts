@@ -14,6 +14,8 @@ const OPENAI_MODELS: Record<OpenAiModel, string> = {
 const ANTHROPIC_MODELS: Record<AnthropicModel, string> = {
     'claude-3-7-sonnet-latest': 'Claude Sonnet 3.7',
     'claude-sonnet-4-0': 'Claude Sonnet 4.0',
+    'claude-sonnet-4-5': 'Claude Sonnet 4.5',
+    'claude-haiku-4-5': 'Claude Haiku 4.5',
 };
 
 const GOOGLE_MODELS: Record<GoogleModel, string> = {
