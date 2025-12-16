@@ -4,6 +4,7 @@ export enum ApiProvider {
 	Anthropic = "anthropic",
 	Google = "google",
 	Mistral = "mistral",
+	OpenAICompatible = "openai-compatible",
 }
 
 // Specific model types for better type safety
@@ -58,6 +59,10 @@ export interface PluginSettings {
 	googleCustomModel: string; // Custom model name for Google
 	mistralModel: MistralModel;
 	mistralCustomModel: string; // Custom model name for Mistral
+	// OpenAI-compatible endpoint settings (for vLLM, LM Studio, Ollama, etc.)
+	openaiCompatibleEndpoint: string; // The base URL for the OpenAI-compatible API
+	openaiCompatibleApiKey: string; // Optional API key (some servers don't require it)
+	openaiCompatibleModel: string; // The model name to use
 	systemPrompt: string; // Added system prompt
 	userPrompt: string; // Renamed from transcriptionPrompt
 	noteNamingOption: NoteNamingOption;
@@ -98,6 +103,10 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	googleCustomModel: "", // Custom model name for Google
 	mistralModel: "mistral-medium-2508",
 	mistralCustomModel: "", // Custom model name for Mistral
+	// OpenAI-compatible endpoint defaults
+	openaiCompatibleEndpoint: "http://localhost:1234/v1", // Default LM Studio endpoint
+	openaiCompatibleApiKey: "", // Optional, many local servers don't require it
+	openaiCompatibleModel: "", // User must specify the model name
 	systemPrompt:
 		"You are an expert at transcribing handwritten notes and typed text from images. Convert the image content to clean markdown format, preserving the structure and organization of the original notes.", // Updated default system prompt (Task 18.3)
 	userPrompt:

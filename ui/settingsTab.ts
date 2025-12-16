@@ -76,6 +76,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 					.addOption(ApiProvider.Anthropic, "Anthropic")
 					.addOption(ApiProvider.Google, "Google")
 					.addOption(ApiProvider.Mistral, "Mistral")
+					.addOption(ApiProvider.OpenAICompatible, "OpenAI-Compatible (Local/Custom)")
 					.setValue(this.plugin.settings.provider)
 					.onChange(async (value) => {
 						this.plugin.settings.provider = value as ApiProvider;
@@ -322,6 +323,62 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 			if (!this.plugin.settings.mistralApiKey) {
 				providerDesc.createEl("p", {
 					text: "⚠️ Mistral API key is required.",
+					cls: "imgtono-setting-warning",
+				});
+			}
+		} else if (this.plugin.settings.provider === ApiProvider.OpenAICompatible) {
+			// OpenAI-Compatible Endpoint URL
+			new Setting(containerEl)
+				.setName("Endpoint URL")
+				.setDesc(
+					"The base URL for your OpenAI-compatible API (e.g., http://localhost:1234/v1 for LM Studio, http://localhost:11434/v1 for Ollama).",
+				)
+				.addText((text) =>
+					text
+						.setPlaceholder("http://localhost:1234/v1")
+						.setValue(this.plugin.settings.openaiCompatibleEndpoint)
+						.onChange(async (value) => {
+							this.plugin.settings.openaiCompatibleEndpoint = value.trim();
+							await this.plugin.saveSettings();
+						}),
+				);
+
+			// OpenAI-Compatible API Key (optional)
+			new Setting(containerEl)
+				.setName("API key (optional)")
+				.setDesc(
+					"Some servers require an API key. Leave empty if your server doesn't require authentication.",
+				)
+				.addText((text) =>
+					text
+						.setPlaceholder("Optional API key")
+						.setValue(this.plugin.settings.openaiCompatibleApiKey)
+						.onChange(async (value) => {
+							this.plugin.settings.openaiCompatibleApiKey = value.trim();
+							await this.plugin.saveSettings();
+						})
+						.inputEl.setAttribute("type", "password"),
+				);
+
+			// OpenAI-Compatible Model Name
+			new Setting(containerEl)
+				.setName("Model name")
+				.setDesc(
+					"The exact model name to use (e.g., llava, llama-3.2-vision, or the model you have loaded).",
+				)
+				.addText((text) =>
+					text
+						.setPlaceholder("Enter model name")
+						.setValue(this.plugin.settings.openaiCompatibleModel)
+						.onChange(async (value) => {
+							this.plugin.settings.openaiCompatibleModel = value.trim();
+							await this.plugin.saveSettings();
+						}),
+				);
+
+			if (!this.plugin.settings.openaiCompatibleModel) {
+				providerDesc.createEl("p", {
+					text: "⚠️ Model name is required.",
 					cls: "imgtono-setting-warning",
 				});
 			}

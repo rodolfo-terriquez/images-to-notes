@@ -54,6 +54,9 @@ export class AIService {
 			anthropicCustomModel,
 			googleCustomModel,
 			mistralCustomModel,
+			openaiCompatibleEndpoint,
+			openaiCompatibleApiKey,
+			openaiCompatibleModel,
 			systemPrompt,
 			userPrompt,
 			openaiBaseUrl,
@@ -163,6 +166,27 @@ export class AIService {
 					userPrompt,
 					mistralApiKey,
 					resolvedMistralModel,
+				);
+			} else if (provider === "openai-compatible") {
+				if (!openaiCompatibleEndpoint) {
+					this.notificationService.notifyError(
+						"OpenAI-compatible endpoint URL is not configured.",
+					);
+					return null;
+				}
+				if (!openaiCompatibleModel) {
+					this.notificationService.notifyError(
+						"OpenAI-compatible model name is not configured.",
+					);
+					return null;
+				}
+				return await this._transcribeWithOpenAI(
+					imageUrl,
+					systemPrompt,
+					userPrompt,
+					openaiCompatibleApiKey || "not-required", // Some servers need a non-empty key
+					openaiCompatibleModel,
+					openaiCompatibleEndpoint,
 				);
 			} else {
 				this.notificationService.notifyError(
