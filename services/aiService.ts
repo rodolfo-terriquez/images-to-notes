@@ -12,7 +12,8 @@ import { encodeImageToBase64 } from "../utils/fileUtils";
 // Constants for API endpoints and headers
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
-const GOOGLE_API_URL = "https://generativelanguage.googleapis.com/v1/models";
+const GOOGLE_API_URL_V1 = "https://generativelanguage.googleapis.com/v1/models";
+const GOOGLE_API_URL_V1BETA = "https://generativelanguage.googleapis.com/v1beta/models";
 const MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions";
 
 export class AIService {
@@ -210,6 +211,26 @@ export class AIService {
 	}
 
 	/**
+	 * Checks if an OpenAI model requires the newer max_completion_tokens parameter
+	 * instead of the deprecated max_tokens parameter.
+	 * Newer models (GPT-5, o-series, etc.) use max_completion_tokens.
+	 */
+	private _useMaxCompletionTokens(model: string): boolean {
+		const lowerModel = model.toLowerCase();
+		// Models that require max_completion_tokens:
+		// - o1, o3, o4 series (reasoning models)
+		// - GPT-5 and newer
+		// - Any model with version >= 5
+		return (
+			lowerModel.startsWith("o1") ||
+			lowerModel.startsWith("o3") ||
+			lowerModel.startsWith("o4") ||
+			lowerModel.startsWith("gpt-5") ||
+			lowerModel.includes("gpt-5")
+		);
+	}
+
+	/**
 	 * Calls the OpenAI API to transcribe the image.
 	 */
 	private async _transcribeWithOpenAI(
@@ -223,6 +244,12 @@ export class AIService {
 		// console.log(`Transcribing with OpenAI (${model})...`);
 		this.notificationService.notifyVerbose(`Sending image to OpenAI (${model})...`);
 		const startTime = Date.now();
+
+		// Determine which token limit parameter to use based on the model
+		// Newer models (GPT-5, o-series) use max_completion_tokens instead of max_tokens
+		const tokenLimitParam = this._useMaxCompletionTokens(model)
+			? { max_completion_tokens: 4000 }
+			: { max_tokens: 4000 };
 
 		const requestBody = {
 			model: model,
@@ -241,7 +268,7 @@ export class AIService {
 					],
 				},
 			],
-			max_tokens: 4000, // Increased token limit
+			...tokenLimitParam,
 		};
 
 		const requestParams: RequestUrlParam = {
@@ -372,6 +399,26 @@ export class AIService {
 	}
 
 	/**
+	 * Determines if a Google model requires the v1beta API endpoint.
+	 * Preview and experimental models are only available on v1beta.
+	 */
+	private _useGoogleV1Beta(model: string): boolean {
+		const lowerModel = model.toLowerCase();
+		// Models that require v1beta API:
+		// - Preview models (contain "preview" in name)
+		// - Experimental models (contain "exp" in name)
+		// - Gemini 2.0+ flash thinking models
+		// - Gemini 3.x models (newer generation)
+		return (
+			lowerModel.includes("preview") ||
+			lowerModel.includes("exp") ||
+			lowerModel.includes("thinking") ||
+			lowerModel.startsWith("gemini-3") ||
+			lowerModel.includes("gemini-3")
+		);
+	}
+
+	/**
 	 * Calls the Google Gemini API to transcribe the image.
 	 */
 	private async _transcribeWithGoogle(
@@ -404,8 +451,11 @@ export class AIService {
 			},
 		};
 
+		// Use v1beta API for preview/experimental models, v1 for stable models
+		const googleApiUrl = this._useGoogleV1Beta(model) ? GOOGLE_API_URL_V1BETA : GOOGLE_API_URL_V1;
+
 		const requestParams: RequestUrlParam = {
-			url: `${GOOGLE_API_URL}/${model}:generateContent?key=${apiKey}`,
+			url: `${googleApiUrl}/${model}:generateContent?key=${apiKey}`,
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
