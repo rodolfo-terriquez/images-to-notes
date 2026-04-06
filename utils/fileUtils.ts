@@ -67,12 +67,41 @@ function _arrayBufferToBase64(buffer: ArrayBuffer): string {
     return window.btoa(binary);
 }
 
+/**
+ * Detect the actual MIME type of an image from its magic bytes.
+ * Falls back to the file extension if the format is not recognized.
+ */
+function _detectMimeType(buffer: ArrayBuffer, fileExtension: string): string {
+    const bytes = new Uint8Array(buffer.slice(0, 12));
+
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47
+        && bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A) {
+        return "image/png";
+    }
+    // JPEG: FF D8 FF
+    if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
+        return "image/jpeg";
+    }
+    // HEIC/HEIF: ISOBMFF container with "ftyp" at offset 4 and a HEIF-compatible brand
+    if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+        const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+        if (["heic", "heix", "hevc", "hevx", "mif1"].includes(brand)) {
+            return "image/heif";
+        }
+    }
+
+    // Fallback to file extension
+    const ext = fileExtension.toLowerCase();
+    return `image/${ext === "jpg" ? "jpeg" : ext}`;
+}
+
 export async function encodeImageToBase64(file: TFile, app: App): Promise<string> {
     try {
         const arrayBuffer = await app.vault.readBinary(file);
         const base64 = _arrayBufferToBase64(arrayBuffer);
-        // Determine the correct prefix based on the file extension
-        const mimeType = `image/${file.extension.toLowerCase() === 'jpg' ? 'jpeg' : file.extension.toLowerCase()}`;
+        // Detect the actual image format from magic bytes, falling back to file extension
+        const mimeType = _detectMimeType(arrayBuffer, file.extension);
         return `data:${mimeType};base64,${base64}`;
     } catch (error) {
         console.error(`Error encoding image ${file.path} to base64:`, error);

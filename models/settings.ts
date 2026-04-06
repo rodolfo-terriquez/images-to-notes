@@ -5,6 +5,7 @@ export enum ApiProvider {
 	Google = "google",
 	Mistral = "mistral",
 	OpenAICompatible = "openai-compatible",
+	GitHubCopilot = "github-copilot",
 }
 
 // Specific model types for better type safety
@@ -31,6 +32,7 @@ export type MistralModel =
 	| "mistral-small-2503"
 	| "mistral-medium-2508"
 	| "custom";
+export type CopilotModel = string;
 
 export enum NoteNamingOption {
 	FirstLine = "first-line",
@@ -63,6 +65,10 @@ export interface PluginSettings {
 	openaiCompatibleEndpoint: string; // The base URL for the OpenAI-compatible API
 	openaiCompatibleApiKey: string; // Optional API key (some servers don't require it)
 	openaiCompatibleModel: string; // The model name to use
+	// GitHub Copilot settings
+	copilotModel: CopilotModel; // Selected Copilot model
+	copilotCustomModel: string; // Custom model name for Copilot
+	copilotOAuthToken: string; // GitHub OAuth token from device flow
 	systemPrompt: string; // Added system prompt
 	userPrompt: string; // Renamed from transcriptionPrompt
 	noteNamingOption: NoteNamingOption;
@@ -107,6 +113,10 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	openaiCompatibleEndpoint: "http://localhost:1234/v1", // Default LM Studio endpoint
 	openaiCompatibleApiKey: "", // Optional, many local servers don't require it
 	openaiCompatibleModel: "", // User must specify the model name
+	// GitHub Copilot defaults
+	copilotModel: "gpt-4o",
+	copilotCustomModel: "",
+	copilotOAuthToken: "",
 	systemPrompt:
 		"You are an expert at transcribing handwritten notes and typed text from images. Convert the image content to clean markdown format, preserving the structure and organization of the original notes.", // Updated default system prompt (Task 18.3)
 	userPrompt:

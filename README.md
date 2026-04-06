@@ -25,7 +25,9 @@ You can drag and drop multiple images at once. They will queue and process one a
 In the plugin settings:
 
 1. Choose an API provider. This is the company that provides the AI model that the plugin will use to transcribe your images.
-2. Paste your API key.
+2. Authenticate:
+   - **OpenAI, Anthropic, Google, Mistral:** Paste your API key.
+   - **GitHub Copilot:** Click "Login with GitHub" and enter the code shown in the settings on the GitHub page that opens.
 3. Choose an AI model.
 
 That's it, everything else is optional.
@@ -35,8 +37,8 @@ That's it, everything else is optional.
 
 The plugin settings allow you to customize how your images are processed and where the output files are stored.
 
-*   **API Provider:** Choose between OpenAI, Anthropic, and Google.
-*   **API Key:** Enter the API key for your chosen provider.
+*   **API Provider:** Choose between OpenAI, Anthropic, Google, Mistral, and GitHub Copilot.
+*   **API Key:** Enter the API key for your chosen provider. (Not required for For GitHub Copilot)
 *   **Model:** Select the specific AI model you want to use for transcription.
 *   **System Prompt:** Defines the overall role or context for the AI (e.g., "You are an expert at transcribing handwritten notes..."). You can customize this and reset it to the default if needed.
 *   **User Prompt:** The specific instruction for the AI for each image. You can edit this to better suit your note style or change the output format.
