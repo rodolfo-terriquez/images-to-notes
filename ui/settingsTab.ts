@@ -427,24 +427,20 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 								await navigator.clipboard.writeText(deviceCode.user_code);
 
 								// Open the verification URL in the user's browser
-								const popup = window.open(deviceCode.verification_uri, "_blank");
+								window.open(deviceCode.verification_uri, "_blank");
 
 								// Show the code in the setting description
 								const descEl = loginSetting.descEl;
 								descEl.empty();
 								descEl.createSpan({ text: "Your code: " });
-								descEl.createEl("code", { text: deviceCode.user_code });
-								if (popup) {
-									descEl.createSpan({ text: " (copied to clipboard). Paste it on the GitHub page that just opened." });
-								} else {
-									descEl.createSpan({ text: " (copied to clipboard). Open " });
-									descEl.createEl("a", {
-										text: deviceCode.verification_uri,
-										href: deviceCode.verification_uri,
-										attr: { target: "_blank" },
-									});
-									descEl.createSpan({ text: " and paste the code." });
-								}
+								descEl.createEl("code", { text: deviceCode.user_code});
+								descEl.createSpan({text: " (copied to clipboard). Open "});
+								descEl.createEl("a", {
+									text: deviceCode.verification_uri,
+									href: deviceCode.verification_uri,
+									attr: {target: "_blank"},
+								});
+								descEl.createSpan({text: " and paste the code."});
 
 								button.setButtonText("Waiting for authorization...");
 
