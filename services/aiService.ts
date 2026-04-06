@@ -7,7 +7,7 @@ import {
 	MistralModel,
 	CopilotModel,
 } from "../models/settings";
-import { CopilotAuthService } from "./copilotAuth";
+import { CopilotService } from "./copilotService";
 import { NotificationService } from "../ui/notificationService";
 import { encodeImageToBase64 } from "../utils/fileUtils";
 
@@ -23,7 +23,7 @@ export class AIService {
 		private settings: PluginSettings,
 		private notificationService: NotificationService,
 		private app: App,
-		private copilotAuth: CopilotAuthService = new CopilotAuthService(),
+		private copilotService: CopilotService,
 	) {}
 
 	/**
@@ -597,7 +597,7 @@ export class AIService {
 
 	/**
 	 * Transcribe an image using GitHub Copilot API.
-	 * Uses the CopilotAuthService for OAuth token management and API calls.
+	 * Uses the CopilotService for OAuth token management and API calls.
 	 */
 	private async _transcribeWithCopilot(
 		imageUrl: string, // data URI
@@ -626,7 +626,7 @@ export class AIService {
 		];
 
 		try {
-			const transcription = await this.copilotAuth.chatCompletion(
+			const transcription = await this.copilotService.chatCompletion(
 				oauthToken,
 				model,
 				messages,

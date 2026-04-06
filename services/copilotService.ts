@@ -33,7 +33,7 @@ export interface CopilotBearerToken {
  * 4. Exchange the OAuth token for a short-lived Copilot bearer token
  * 5. Use the bearer token for API calls (auto-refresh on expiry)
  */
-export class CopilotAuthService {
+export class CopilotService {
 	private bearerToken: CopilotBearerToken | null = null;
 	private bearerTokenOAuthSource: string | null = null;
 

@@ -20,7 +20,6 @@ import {
 	NoteNamingOption,
 	TranscriptionPlacement,
 } from "../models/settings"; // Import relevant types AND DEFAULTS AND NoteNamingOption
-import { CopilotAuthService } from "../services/copilotAuth";
 
 // Define available models - These should match the types in settings.ts
 const OPENAI_MODELS: Record<OpenAiModel, string> = {
@@ -388,7 +387,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 			}
 		} else if (this.plugin.settings.provider === ApiProvider.GitHubCopilot) {
 			// GitHub Copilot - OAuth Login
-			const copilotAuth = new CopilotAuthService();
+			const copilotService = this.plugin.copilotService;
 			const isLoggedIn = !!this.plugin.settings.copilotOAuthToken;
 			const copilotLoginPrompt = "Log in with your GitHub account to use Copilot.";
 
@@ -407,7 +406,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 						.setWarning()
 						.onClick(async () => {
 							this.plugin.settings.copilotOAuthToken = "";
-							copilotAuth.clearCache();
+							copilotService.clearCache();
 							await this.plugin.saveSettings();
 							this.display();
 						}),
@@ -422,7 +421,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 								button.setButtonText("Starting...");
 								button.setDisabled(true);
 
-								const deviceCode = await copilotAuth.requestDeviceCode();
+								const deviceCode = await copilotService.requestDeviceCode();
 
 								// Copy user code to clipboard
 								await navigator.clipboard.writeText(deviceCode.user_code);
@@ -449,7 +448,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
 								button.setButtonText("Waiting for authorization...");
 
-								const oauthToken = await copilotAuth.pollForOAuthToken(
+								const oauthToken = await copilotService.pollForOAuthToken(
 									deviceCode.device_code,
 									deviceCode.interval,
 								);
@@ -500,7 +499,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 					});
 
 					// Fetch models asynchronously and populate dropdown
-					copilotAuth
+					copilotService
 					.listModels(this.plugin.settings.copilotOAuthToken)
 					.then(async (models) => {
 						models.sort((a, b) => a.localeCompare(b));
