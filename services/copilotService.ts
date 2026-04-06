@@ -35,7 +35,6 @@ export interface CopilotBearerToken {
  */
 export class CopilotService {
 	private bearerToken: CopilotBearerToken | null = null;
-	private bearerTokenOAuthSource: string | null = null;
 
 	/**
 	 * Step 1: Request device and user verification codes from GitHub.
@@ -172,7 +171,6 @@ export class CopilotService {
 			token: data.token,
 			expires_at: data.expires_at,
 		};
-		this.bearerTokenOAuthSource = oauthToken;
 
 		return this.bearerToken;
 	}
@@ -189,10 +187,8 @@ export class CopilotService {
 		}
 
 		// Check if we have a valid cached bearer token (with 60s buffer)
-		// Also invalidate if the OAuth token changed (e.g., different account)
 		if (
 			this.bearerToken &&
-			this.bearerTokenOAuthSource === oauthToken &&
 			this.bearerToken.expires_at > Date.now() / 1000 + 60
 		) {
 			return this.bearerToken.token;
@@ -338,7 +334,6 @@ export class CopilotService {
 	 */
 	clearCache(): void {
 		this.bearerToken = null;
-		this.bearerTokenOAuthSource = null;
 	}
 
 	private sleep(ms: number): Promise<void> {
