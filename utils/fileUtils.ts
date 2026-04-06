@@ -83,13 +83,6 @@ function _detectMimeType(buffer: ArrayBuffer, fileExtension: string): string {
     if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
         return "image/jpeg";
     }
-    // HEIC/HEIF: ISOBMFF container with "ftyp" at offset 4 and a HEIF-compatible brand
-    if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
-        const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
-        if (["heic", "heix", "hevc", "hevx", "mif1"].includes(brand)) {
-            return "image/heif";
-        }
-    }
 
     // Fallback to file extension
     const ext = fileExtension.toLowerCase();

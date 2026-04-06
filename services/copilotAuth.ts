@@ -107,29 +107,33 @@ export class CopilotAuthService {
 				return data.access_token as string;
 			}
 
-			if (data.error) {
-				switch (data.error) {
-					case "authorization_pending":
-						onPending?.();
-						continue;
-					case "slow_down":
-						// Add 5 seconds as required by RFC 8628, section 3.5
-						// https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
-						currentInterval += 5;
-						continue;
-					case "expired_token":
-						throw new Error(
-							"The device code has expired. Please try logging in again.",
-						);
-					case "access_denied":
-						throw new Error(
-							"Login was cancelled or denied by the user.",
-						);
-					default:
-						throw new Error(
-							`OAuth error: ${data.error} - ${data.error_description || "Unknown error"}`,
-						);
-				}
+			if (!data.error) {
+				throw new Error(
+					`Unexpected token response: ${JSON.stringify(data)}`,
+				);
+			}
+
+			switch (data.error) {
+				case "authorization_pending":
+					onPending?.();
+					continue;
+				case "slow_down":
+					// Add 5 seconds as required by RFC 8628, section 3.5
+					// https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
+					currentInterval += 5;
+					continue;
+				case "expired_token":
+					throw new Error(
+						"The device code has expired. Please try logging in again.",
+					);
+				case "access_denied":
+					throw new Error(
+						"Login was cancelled or denied by the user.",
+					);
+				default:
+					throw new Error(
+						`OAuth error: ${data.error} - ${data.error_description || "Unknown error"}`,
+					);
 			}
 		}
 	}
@@ -328,12 +332,6 @@ export class CopilotAuthService {
 		const data = response.json;
 		return (data?.data || []).map((m: any) => m.id as string);
 	}
-
-	/**
-	 * Parses the raw API response and filters to models that support
-	 * /chat/completions and have vision capability (for image transcription).
-	 */
-	
 
 	/**
 	 * Clear cached bearer token (e.g., on logout).

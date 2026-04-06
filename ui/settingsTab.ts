@@ -427,15 +427,25 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 								// Copy user code to clipboard
 								await navigator.clipboard.writeText(deviceCode.user_code);
 
+								// Open the verification URL in the user's browser
+								const popup = window.open(deviceCode.verification_uri, "_blank");
+
 								// Show the code in the setting description
 								const descEl = loginSetting.descEl;
 								descEl.empty();
 								descEl.createSpan({ text: "Your code: " });
 								descEl.createEl("code", { text: deviceCode.user_code });
-								descEl.createSpan({ text: " (copied to clipboard). Paste it on the GitHub page that just opened." });
-
-								// Open the verification URL in the user's browser
-								window.open(deviceCode.verification_uri, "_blank");
+								if (popup) {
+									descEl.createSpan({ text: " (copied to clipboard). Paste it on the GitHub page that just opened." });
+								} else {
+									descEl.createSpan({ text: " (copied to clipboard). Open " });
+									descEl.createEl("a", {
+										text: deviceCode.verification_uri,
+										href: deviceCode.verification_uri,
+										attr: { target: "_blank" },
+									});
+									descEl.createSpan({ text: " and paste the code." });
+								}
 
 								button.setButtonText("Waiting for authorization...");
 
@@ -491,46 +501,46 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
 					// Fetch models asynchronously and populate dropdown
 					copilotAuth
-						.listModels(this.plugin.settings.copilotOAuthToken)
-						.then((models) => {
-							models.sort((a, b) => a.localeCompare(b));
+					.listModels(this.plugin.settings.copilotOAuthToken)
+					.then(async (models) => {
+						models.sort((a, b) => a.localeCompare(b));
 
-							dropdown.selectEl.empty();
-							for (const modelId of models) {
-								dropdown.addOption(modelId, modelId);
-							}
-							dropdown.addOption("custom", "Custom Model");
+						dropdown.selectEl.empty();
+						for (const modelId of models) {
+							dropdown.addOption(modelId, modelId);
+						}
+						dropdown.addOption("custom", "Custom Model");
 
-							const currentModel = this.plugin.settings.copilotModel;
-							if (models.includes(currentModel) || currentModel === "custom") {
-								dropdown.setValue(currentModel);
-							} else if (models.length > 0) {
-								dropdown.setValue(models[0]);
-								this.plugin.settings.copilotModel = models[0];
-								this.plugin.saveSettings();
-							}
+						const currentModel = this.plugin.settings.copilotModel;
+						if (models.includes(currentModel) || currentModel === "custom") {
+							dropdown.setValue(currentModel);
+						} else if (models.length > 0) {
+							dropdown.setValue(models[0]);
+							this.plugin.settings.copilotModel = models[0];
+							await this.plugin.saveSettings();
+						}
 
-							descEl.empty();
-							descEl.setText("Select the model to use via GitHub Copilot.");
-						})
-						.catch((err: any) => {
-							console.error("Failed to fetch Copilot models:", err);
+						descEl.empty();
+						descEl.setText("Select the model to use via GitHub Copilot.");
+					})
+					.catch(async (err: any) => {
+						console.error("Failed to fetch Copilot models:", err);
 
-							// On failure, only show "Custom Model"
-							dropdown.selectEl.empty();
-							dropdown.addOption("custom", "Custom Model");
-							dropdown.setValue("custom");
+						// On failure, only show "Custom Model"
+						dropdown.selectEl.empty();
+						dropdown.addOption("custom", "Custom Model");
+						dropdown.setValue("custom");
 
-							if (this.plugin.settings.copilotModel !== "custom") {
-								this.plugin.settings.copilotModel = "custom";
-								this.plugin.saveSettings();
-							}
+						if (this.plugin.settings.copilotModel !== "custom") {
+							this.plugin.settings.copilotModel = "custom";
+							await this.plugin.saveSettings();
+						}
 
-							customModelSetting.settingEl.show();
+						customModelSetting.settingEl.show();
 
-							descEl.empty();
-							descEl.setText("Failed to load models. Enter a model name manually, or try logging out and back in.");
-						});
+						descEl.empty();
+						descEl.setText("Failed to load models. Enter a model name manually, or try logging out and back in.");
+					});
 				});
 
 				// Custom model input - always rendered, visibility toggled
