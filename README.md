@@ -38,7 +38,7 @@ That's it, everything else is optional.
 The plugin settings allow you to customize how your images are processed and where the output files are stored.
 
 *   **API Provider:** Choose between OpenAI, Anthropic, Google, Mistral, and GitHub Copilot.
-*   **API Key:** Enter the API key for your chosen provider. (Not required for For GitHub Copilot)
+*   **API Key:** Enter the API key for your chosen provider. (Not required for GitHub Copilot)
 *   **Model:** Select the specific AI model you want to use for transcription.
 *   **System Prompt:** Defines the overall role or context for the AI (e.g., "You are an expert at transcribing handwritten notes..."). You can customize this and reset it to the default if needed.
 *   **User Prompt:** The specific instruction for the AI for each image. You can edit this to better suit your note style or change the output format.
