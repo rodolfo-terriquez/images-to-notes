@@ -7,12 +7,14 @@ import { convertHeicToJpg, compressImage } from './utils/imageUtils';
 import { NotificationService } from './ui/notificationService';
 import { AIService } from './services/aiService';
 import { NoteCreator } from './services/noteCreator';
+import { CopilotService } from './services/copilotService';
 import { ProcessingJob } from './models/processingJob';
 
 export default class ImageTranscriberPlugin extends Plugin {
 	settings: PluginSettings;
 	processingQueue: ProcessingQueue;
 	notificationService: NotificationService;
+	copilotService: CopilotService;
 	aiService: AIService;
 	noteCreator: NoteCreator;
 	isReady: boolean = false;
@@ -29,6 +31,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 		this.isMobileDevice = Platform.isMobile;
 
 		this.notificationService = new NotificationService(this.settings);
+		this.copilotService = new CopilotService();
 		
 		this.addSettingTab(new TranscriptionSettingTab(this.app, this));
 
@@ -37,7 +40,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 			// console.log('Workspace layout ready.');
 
 			// Initialize services and queue here
-			this.aiService = new AIService(this.settings, this.notificationService, this.app);
+			this.aiService = new AIService(this.settings, this.notificationService, this.app, this.copilotService);
 			this.noteCreator = new NoteCreator(this.settings, this.notificationService, this.app);
 			this.processingQueue = new ProcessingQueue();
 			this.processingQueue.setProcessCallback(this.processImageFile.bind(this));

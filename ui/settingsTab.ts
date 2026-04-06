@@ -53,6 +53,8 @@ const MISTRAL_MODELS: Record<MistralModel, string> = {
 	custom: "Custom Model",
 };
 
+// Copilot models are fetched dynamically from the API
+
 export class TranscriptionSettingTab extends PluginSettingTab {
 	plugin: ImageTranscriberPlugin;
 
@@ -77,6 +79,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 					.addOption(ApiProvider.Google, "Google")
 					.addOption(ApiProvider.Mistral, "Mistral")
 					.addOption(ApiProvider.OpenAICompatible, "OpenAI-Compatible (Local/Custom)")
+					.addOption(ApiProvider.GitHubCopilot, "GitHub Copilot")
 					.setValue(this.plugin.settings.provider)
 					.onChange(async (value) => {
 						this.plugin.settings.provider = value as ApiProvider;
@@ -379,6 +382,183 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 			if (!this.plugin.settings.openaiCompatibleModel) {
 				providerDesc.createEl("p", {
 					text: "⚠️ Model name is required.",
+					cls: "imgtono-setting-warning",
+				});
+			}
+		} else if (this.plugin.settings.provider === ApiProvider.GitHubCopilot) {
+			// GitHub Copilot - OAuth Login
+			const copilotService = this.plugin.copilotService;
+			const isLoggedIn = !!this.plugin.settings.copilotOAuthToken;
+			const copilotLoginPrompt = "Log in with your GitHub account to use Copilot.";
+
+			const loginSetting = new Setting(containerEl)
+				.setName("GitHub account")
+				.setDesc(
+					isLoggedIn
+						? "You are logged in to GitHub Copilot."
+						: copilotLoginPrompt,
+				);
+
+			if (isLoggedIn) {
+				loginSetting.addButton((button: ButtonComponent) =>
+					button
+						.setButtonText("Logout")
+						.setWarning()
+						.onClick(async () => {
+							this.plugin.settings.copilotOAuthToken = "";
+							copilotService.clearCache();
+							await this.plugin.saveSettings();
+							this.display();
+						}),
+				);
+			} else {
+				loginSetting.addButton((button: ButtonComponent) =>
+					button
+						.setButtonText("Login with GitHub")
+						.setCta()
+						.onClick(async () => {
+							try {
+								button.setButtonText("Starting...");
+								button.setDisabled(true);
+
+								const deviceCode = await copilotService.requestDeviceCode();
+
+								// Copy user code to clipboard
+								await navigator.clipboard.writeText(deviceCode.user_code);
+
+								// Open the verification URL in the user's browser
+								window.open(deviceCode.verification_uri, "_blank");
+
+								// Show the code in the setting description
+								const descEl = loginSetting.descEl;
+								descEl.empty();
+								descEl.createSpan({ text: "Your code: " });
+								descEl.createEl("code", { text: deviceCode.user_code});
+								descEl.createSpan({text: " (copied to clipboard). Open "});
+								descEl.createEl("a", {
+									text: deviceCode.verification_uri,
+									href: deviceCode.verification_uri,
+									attr: {target: "_blank"},
+								});
+								descEl.createSpan({text: " and paste the code."});
+
+								button.setButtonText("Waiting for authorization...");
+
+								const oauthToken = await copilotService.pollForOAuthToken(
+									deviceCode.device_code,
+									deviceCode.interval,
+								);
+
+								this.plugin.settings.copilotOAuthToken = oauthToken;
+								await this.plugin.saveSettings();
+
+								new Notice("Successfully logged in to GitHub Copilot!");
+								this.display();
+							} catch (error: any) {
+								console.error("Copilot login error:", error);
+								new Notice(`GitHub login failed: ${error.message}`);
+								loginSetting.setDesc(copilotLoginPrompt);
+								button.setButtonText("Login with GitHub");
+								button.setDisabled(false);
+							}
+						}),
+				);
+			}
+
+			// Copilot Model - dynamically fetched from API
+			if (isLoggedIn) {
+				const modelSetting = new Setting(containerEl)
+					.setName("Copilot model");
+
+				// Show spinner in description while loading
+				const descEl = modelSetting.descEl;
+				descEl.empty();
+				const loadingContainer = descEl.createSpan({ cls: "imgtono-model-loading-inline" });
+				loadingContainer.createSpan({ cls: "imgtono-spinner" });
+				loadingContainer.createSpan({ text: "Fetching available models..." });
+
+				modelSetting.addDropdown((dropdown) => {
+					// Show current model as placeholder while loading
+					if (this.plugin.settings.copilotModel && this.plugin.settings.copilotModel !== "custom") {
+						dropdown.addOption(
+							this.plugin.settings.copilotModel,
+							this.plugin.settings.copilotModel,
+						);
+					}
+					dropdown.addOption("custom", "Custom Model");
+					dropdown.setValue(this.plugin.settings.copilotModel);
+
+					dropdown.onChange(async (value) => {
+						this.plugin.settings.copilotModel = value;
+						await this.plugin.saveSettings();
+						customModelSetting.settingEl.toggle(value === "custom");
+					});
+
+					// Fetch models asynchronously and populate dropdown
+					copilotService
+					.listModels(this.plugin.settings.copilotOAuthToken)
+					.then(async (models) => {
+						models.sort((a, b) => a.localeCompare(b));
+
+						dropdown.selectEl.empty();
+						for (const modelId of models) {
+							dropdown.addOption(modelId, modelId);
+						}
+						dropdown.addOption("custom", "Custom Model");
+
+						const currentModel = this.plugin.settings.copilotModel;
+						if (models.includes(currentModel) || currentModel === "custom") {
+							dropdown.setValue(currentModel);
+						} else if (models.length > 0) {
+							dropdown.setValue(models[0]);
+							this.plugin.settings.copilotModel = models[0];
+							await this.plugin.saveSettings();
+						}
+
+						descEl.empty();
+						descEl.setText("Select the model to use via GitHub Copilot.");
+					})
+					.catch(async (err: any) => {
+						console.error("Failed to fetch Copilot models:", err);
+
+						// On failure, only show "Custom Model"
+						dropdown.selectEl.empty();
+						dropdown.addOption("custom", "Custom Model");
+						dropdown.setValue("custom");
+
+						if (this.plugin.settings.copilotModel !== "custom") {
+							this.plugin.settings.copilotModel = "custom";
+							await this.plugin.saveSettings();
+						}
+
+						customModelSetting.settingEl.show();
+
+						descEl.empty();
+						descEl.setText("Failed to load models. Enter a model name manually, or try logging out and back in.");
+					});
+				});
+
+				// Custom model input - always rendered, visibility toggled
+				const customModelSetting = new Setting(containerEl)
+					.setName("Custom model name")
+					.setDesc(
+						"Enter the exact model name available on GitHub Copilot (e.g., gpt-4o-mini).",
+					)
+					.addText((text) =>
+						text
+							.setPlaceholder("Enter model name")
+							.setValue(this.plugin.settings.copilotCustomModel)
+							.onChange(async (value) => {
+								this.plugin.settings.copilotCustomModel = value.trim();
+								await this.plugin.saveSettings();
+							}),
+					);
+				customModelSetting.settingEl.toggle(this.plugin.settings.copilotModel === "custom");
+			}
+
+			if (!isLoggedIn) {
+				providerDesc.createEl("p", {
+					text: "⚠️ GitHub Copilot authentication is required. Click 'Login with GitHub' below.",
 					cls: "imgtono-setting-warning",
 				});
 			}

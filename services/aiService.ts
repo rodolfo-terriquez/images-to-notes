@@ -5,7 +5,9 @@ import {
 	AnthropicModel,
 	GoogleModel,
 	MistralModel,
+	CopilotModel,
 } from "../models/settings";
+import { CopilotService } from "./copilotService";
 import { NotificationService } from "../ui/notificationService";
 import { encodeImageToBase64 } from "../utils/fileUtils";
 
@@ -21,6 +23,7 @@ export class AIService {
 		private settings: PluginSettings,
 		private notificationService: NotificationService,
 		private app: App,
+		private copilotService: CopilotService,
 	) {}
 
 	/**
@@ -188,6 +191,29 @@ export class AIService {
 					openaiCompatibleApiKey || "not-required", // Some servers need a non-empty key
 					openaiCompatibleModel,
 					openaiCompatibleEndpoint,
+				);
+			} else if (provider === "github-copilot") {
+				const { copilotOAuthToken, copilotModel, copilotCustomModel } = this.settings;
+				if (!copilotOAuthToken) {
+					this.notificationService.notifyError(
+						"GitHub Copilot is not authenticated. Please log in via the plugin settings.",
+					);
+					return null;
+				}
+				const resolvedCopilotModel =
+					copilotModel === "custom" ? copilotCustomModel : copilotModel;
+				if (!resolvedCopilotModel) {
+					this.notificationService.notifyError(
+						"GitHub Copilot model is not configured. Please select a model or enter a custom model name.",
+					);
+					return null;
+				}
+				return await this._transcribeWithCopilot(
+					imageUrl,
+					systemPrompt,
+					userPrompt,
+					copilotOAuthToken,
+					resolvedCopilotModel,
 				);
 			} else {
 				this.notificationService.notifyError(
@@ -565,6 +591,59 @@ export class AIService {
 			}
 		} catch (error) {
 			console.error("Error calling Mistral API:", error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Transcribe an image using GitHub Copilot API.
+	 * Uses the CopilotService for OAuth token management and API calls.
+	 */
+	private async _transcribeWithCopilot(
+		imageUrl: string, // data URI
+		systemPrompt: string,
+		userPrompt: string,
+		oauthToken: string,
+		model: string,
+	): Promise<string | null> {
+		this.notificationService.notifyVerbose(`Sending image to GitHub Copilot (${model})...`);
+		const startTime = Date.now();
+
+		const messages = [
+			{ role: "system", content: systemPrompt },
+			{
+				role: "user",
+				content: [
+					{ type: "text", text: userPrompt },
+					{
+						type: "image_url",
+						image_url: {
+							url: imageUrl,
+						},
+					},
+				],
+			},
+		];
+
+		try {
+			const transcription = await this.copilotService.chatCompletion(
+				oauthToken,
+				model,
+				messages,
+				4000,
+			);
+
+			if (transcription) {
+				const endTime = Date.now();
+				this.notificationService.notifyVerbose(
+					`Copilot response received (${(endTime - startTime) / 1000}s).`,
+				);
+				return transcription;
+			} else {
+				throw new Error("Invalid response format from Copilot API.");
+			}
+		} catch (error) {
+			console.error("Error calling Copilot API:", error);
 			throw error;
 		}
 	}
