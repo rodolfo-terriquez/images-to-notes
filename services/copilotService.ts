@@ -66,17 +66,20 @@ export class CopilotService {
 	 *
 	 * @param deviceCode - The device_code from step 1
 	 * @param interval - Polling interval in seconds
+	 * @param expiresIn - Maximum time to poll in seconds (from device code response)
 	 * @param onPending - Optional callback when waiting for user authorization
 	 * @returns The GitHub OAuth access token
 	 */
 	async pollForOAuthToken(
 		deviceCode: string,
 		interval: number,
+		expiresIn: number = 900,
 		onPending?: () => void,
 	): Promise<string> {
 		let currentInterval = interval;
+		const deadline = Date.now() + expiresIn * 1000;
 
-		while (true) {
+		while (Date.now() < deadline) {
 			await this.sleep(currentInterval * 1000);
 
 			const response = await requestUrl({
@@ -129,12 +132,16 @@ export class CopilotService {
 					throw new Error(
 						"Login was cancelled or denied by the user.",
 					);
-				default:
-					throw new Error(
-						`OAuth error: ${data.error} - ${data.error_description || "Unknown error"}`,
-					);
+			default:
+				throw new Error(
+					`OAuth error: ${data.error} - ${data.error_description || "Unknown error"}`,
+				);
 			}
 		}
+
+		throw new Error(
+			"The device code has expired. Please try logging in again.",
+		);
 	}
 
 	/**

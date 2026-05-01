@@ -423,8 +423,14 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
 								const deviceCode = await copilotService.requestDeviceCode();
 
-								// Copy user code to clipboard
-								await navigator.clipboard.writeText(deviceCode.user_code);
+								// Copy user code to clipboard (best-effort; may fail on mobile)
+								let clipboardSuccess = false;
+								try {
+									await navigator.clipboard.writeText(deviceCode.user_code);
+									clipboardSuccess = true;
+								} catch {
+									console.warn("Could not copy device code to clipboard.");
+								}
 
 								// Open the verification URL in the user's browser
 								window.open(deviceCode.verification_uri, "_blank");
@@ -434,7 +440,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 								descEl.empty();
 								descEl.createSpan({ text: "Your code: " });
 								descEl.createEl("code", { text: deviceCode.user_code});
-								descEl.createSpan({text: " (copied to clipboard). Open "});
+								descEl.createSpan({text: clipboardSuccess ? " (copied to clipboard). Open " : ". Open "});
 								descEl.createEl("a", {
 									text: deviceCode.verification_uri,
 									href: deviceCode.verification_uri,
@@ -447,6 +453,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 								const oauthToken = await copilotService.pollForOAuthToken(
 									deviceCode.device_code,
 									deviceCode.interval,
+									deviceCode.expires_in,
 								);
 
 								this.plugin.settings.copilotOAuthToken = oauthToken;
