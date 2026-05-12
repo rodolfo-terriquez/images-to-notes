@@ -8,6 +8,7 @@ import {
 	Notice,
 	ButtonComponent,
 	TFolder,
+	Modal,
 } from "obsidian";
 import ImageTranscriberPlugin from "../main"; // Corrected import
 import {
@@ -23,35 +24,90 @@ import {
 
 // Define available models - These should match the types in settings.ts
 const OPENAI_MODELS: Record<OpenAiModel, string> = {
-	"gpt-4.1": "GPT-4.1",
-	"gpt-4.1-mini": "GPT-4.1 Mini",
-	"o4-mini": "o4 Mini",
-	"gpt-5-2025-08-07": "GPT-5",
-	"gpt-5-mini-2025-08-07": "GPT-5 Mini",
+	"gpt-5.5": "GPT-5.5",
+	"gpt-5.4": "GPT-5.4",
+	"gpt-5.4-mini": "GPT-5.4 Mini",
+	"gpt-4o": "GPT-4o",
+	"gpt-4o-mini": "GPT-4o Mini",
 	custom: "Custom Model",
 };
 
 const ANTHROPIC_MODELS: Record<AnthropicModel, string> = {
-	"claude-3-7-sonnet-latest": "Claude Sonnet 3.7",
-	"claude-sonnet-4-0": "Claude Sonnet 4.0",
-	"claude-sonnet-4-5": "Claude Sonnet 4.5",
+	"claude-opus-4-7": "Claude Opus 4.7",
+	"claude-sonnet-4-6": "Claude Sonnet 4.6",
 	"claude-haiku-4-5": "Claude Haiku 4.5",
 	custom: "Custom Model",
 };
 
 const GOOGLE_MODELS: Record<GoogleModel, string> = {
-	"gemini-2.0-flash": "Gemini 2.0 Flash",
+	"gemini-3.1-pro-preview": "Gemini 3.1 Pro (Preview)",
+	"gemini-3-flash-preview": "Gemini 3 Flash (Preview)",
+	"gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite",
+	"gemini-2.5-pro": "Gemini 2.5 Pro",
 	"gemini-2.5-flash": "Gemini 2.5 Flash",
-	"gemini-2.5-flash-lite": "Gemini 2.5 Flash Lite",
+	"gemini-2.5-flash-lite": "Gemini 2.5 Flash-Lite",
 	custom: "Custom Model",
 };
 
 const MISTRAL_MODELS: Record<MistralModel, string> = {
-	"mistral-ocr-2505": "Mistral OCR 2505",
-	"mistral-small-2503": "Mistral Small 3.1",
+	"mistral-medium-3-5": "Mistral Medium 3.5",
+	"mistral-small-2603": "Mistral Small 4",
+	"mistral-large-2512": "Mistral Large 3",
 	"mistral-medium-2508": "Mistral Medium 3.1",
+	"ministral-14b-2512": "Ministral 3 14B",
+	"ministral-8b-2512": "Ministral 3 8B",
+	"ministral-3b-2512": "Ministral 3 3B",
 	custom: "Custom Model",
 };
+
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : "Unknown error";
+}
+
+class ConfirmationModal extends Modal {
+	private resolved = false;
+
+	constructor(
+		app: App,
+		private title: string,
+		private message: string,
+		private onResolve: (confirmed: boolean) => void,
+	) {
+		super(app);
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.createEl("h3", { text: this.title });
+		contentEl.createEl("p", { text: this.message });
+
+		const buttonRow = contentEl.createDiv({ cls: "imgtono-confirmation-actions" });
+		new ButtonComponent(buttonRow)
+			.setButtonText("Cancel")
+			.onClick(() => this.finish(false));
+		new ButtonComponent(buttonRow)
+			.setButtonText("Clear history")
+			.setWarning()
+			.onClick(() => this.finish(true));
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+		if (!this.resolved) {
+			this.onResolve(false);
+		}
+	}
+
+	private finish(confirmed: boolean): void {
+		if (this.resolved) {
+			return;
+		}
+		this.resolved = true;
+		this.close();
+		this.onResolve(confirmed);
+	}
+}
 
 // Copilot models are fetched dynamically from the API
 
@@ -61,6 +117,12 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 	constructor(app: App, plugin: ImageTranscriberPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+	}
+
+	private confirmAction(title: string, message: string): Promise<boolean> {
+		return new Promise((resolve) => {
+			new ConfirmationModal(this.app, title, message, resolve).open();
+		});
 	}
 
 	display(): void {
@@ -128,7 +190,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 			new Setting(containerEl)
 				.setName("OpenAI model")
 				.setDesc(
-					"Select the OpenAI model to use. GPT-4.1 Mini is great for its low cost and high accuracy.",
+					"Select the OpenAI model to use. GPT-5.4 Mini is a strong current default for cost and latency, while GPT-5.5 is the flagship choice.",
 				)
 				.addDropdown((dropdown) => {
 					// Use the imported type and constant
@@ -429,7 +491,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 									await navigator.clipboard.writeText(deviceCode.user_code);
 									clipboardSuccess = true;
 								} catch {
-									console.warn("Could not copy device code to clipboard.");
+									// Clipboard access is best-effort and can fail on some platforms.
 								}
 
 								// Open the verification URL in the user's browser
@@ -461,9 +523,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
 								new Notice("Successfully logged in to GitHub Copilot!");
 								this.display();
-							} catch (error: any) {
-								console.error("Copilot login error:", error);
-								new Notice(`GitHub login failed: ${error.message}`);
+							} catch (error: unknown) {
+								new Notice(`GitHub login failed: ${getErrorMessage(error)}`);
 								loginSetting.setDesc(copilotLoginPrompt);
 								button.setButtonText("Login with GitHub");
 								button.setDisabled(false);
@@ -525,9 +586,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 						descEl.empty();
 						descEl.setText("Select the model to use via GitHub Copilot.");
 					})
-					.catch(async (err: any) => {
-						console.error("Failed to fetch Copilot models:", err);
-
+					.catch(async () => {
 						// On failure, only show "Custom Model"
 						dropdown.selectEl.empty();
 						dropdown.addOption("custom", "Custom Model");
@@ -605,7 +664,6 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 				await this.plugin.saveSettings();
 			});
 		systemPromptTextArea.inputEl.rows = 4;
-		systemPromptTextArea.inputEl.style.width = "100%";
 
 		// Add reset button below the text area
 		const systemPromptButtonContainer = systemPromptContainer.createDiv({
@@ -653,7 +711,6 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 				await this.plugin.saveSettings();
 			});
 		userPromptTextArea.inputEl.rows = 6; // Make it taller
-		userPromptTextArea.inputEl.style.width = "100%";
 
 		// Add reset button below the text area
 		const userPromptButtonContainer = userPromptContainer.createDiv({
@@ -761,16 +818,16 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 					.setButtonText("Clear history")
 					.setWarning() // Makes the button red for caution
 					.onClick(async () => {
-						// Simple confirmation dialog
-						if (
-							confirm(
-								"Are you sure you want to clear the entire processed image history? This cannot be undone.",
-							)
-						) {
+						const confirmed = await this.confirmAction(
+							"Clear processed image history?",
+							"Are you sure you want to clear the entire processed image history? This cannot be undone.",
+						);
+
+						if (confirmed) {
 							this.plugin.settings.processedImagePaths = [];
 							await this.plugin.saveSettings();
 							new Notice("Processed image history cleared.");
-							this.display(); // Re-render the settings tab to update the count
+							this.display();
 						} else {
 							new Notice("Clear history cancelled.");
 						}
@@ -802,7 +859,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 		});
 		folderInput = new TextComponent(folderControl);
 		folderInput.setPlaceholder(placeholder).setValue(value).onChange(onChange);
-		folderInput.inputEl.style.width = "100%";
+		folderInput.inputEl.addClass("imgtono-full-width-input");
 
 		const folderButtonContainer = folderSettingContainer.createDiv({
 			cls: "imgtono-setting-button-row",
@@ -840,16 +897,16 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
 		const folders = this.app.vault
 			.getAllLoadedFiles()
-			.filter((file) => file instanceof TFolder) as TFolder[];
+			.filter((file): file is TFolder => file instanceof TFolder);
 		folders.forEach((folder) => {
 			dropdown.addOption(folder.path, folder.path === "/" ? "Vault Root (/)" : folder.path);
 		});
 
 		dropdown.setValue(value).onChange(onChange);
-		dropdown.selectEl.style.width = "100%";
+		dropdown.selectEl.addClass("imgtono-full-width-select");
 
 		if (!value && folders.length > 0) {
-			const warningEl = folderHeader.createEl("p", {
+			folderHeader.createEl("p", {
 				text: "⚠️ Please select a folder.",
 				cls: "imgtono-setting-warning",
 			});
@@ -975,7 +1032,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 				await this.plugin.saveSettings();
 				folderNameInput.setValue(this.plugin.settings.imageFolderName); // Ensure UI reflects the possibly defaulted value
 			});
-		folderNameInput.inputEl.style.width = "100%";
+		folderNameInput.inputEl.addClass("imgtono-full-width-input");
 
 		const folderNameButtonContainer = folderNameContainer.createDiv({
 			cls: "imgtono-setting-button-row",
@@ -1034,11 +1091,11 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 				this.plugin.settings.noteNamingOption = value as NoteNamingOption;
 				await this.plugin.saveSettings();
 			});
-		dropdown.selectEl.style.width = "100%";
+		dropdown.selectEl.addClass("imgtono-full-width-select");
 	}
 
 	private createSourceFolderSetting(containerEl: HTMLElement): void {
-		const setting = new Setting(containerEl)
+		new Setting(containerEl)
 			.setName("Transcribe only from a specific folder")
 			.setDesc(
 				"If enabled, only images added to the selected folder below will be transcribed.",

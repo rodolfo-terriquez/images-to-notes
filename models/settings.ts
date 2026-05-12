@@ -10,27 +10,33 @@ export enum ApiProvider {
 
 // Specific model types for better type safety
 export type OpenAiModel =
-	| "gpt-4.1"
-	| "gpt-4.1-mini"
-	| "o4-mini"
-	| "gpt-5-2025-08-07"
-	| "gpt-5-mini-2025-08-07"
+	| "gpt-5.5"
+	| "gpt-5.4"
+	| "gpt-5.4-mini"
+	| "gpt-4o"
+	| "gpt-4o-mini"
 	| "custom";
 export type AnthropicModel =
-	| "claude-3-7-sonnet-latest"
-	| "claude-sonnet-4-0"
-	| "claude-sonnet-4-5"
+	| "claude-opus-4-7"
+	| "claude-sonnet-4-6"
 	| "claude-haiku-4-5"
 	| "custom";
 export type GoogleModel =
-	| "gemini-2.0-flash"
+	| "gemini-3.1-pro-preview"
+	| "gemini-3-flash-preview"
+	| "gemini-3.1-flash-lite"
+	| "gemini-2.5-pro"
 	| "gemini-2.5-flash"
 	| "gemini-2.5-flash-lite"
 	| "custom";
 export type MistralModel =
-	| "mistral-ocr-2505"
-	| "mistral-small-2503"
+	| "mistral-medium-3-5"
+	| "mistral-small-2603"
+	| "mistral-large-2512"
 	| "mistral-medium-2508"
+	| "ministral-14b-2512"
+	| "ministral-8b-2512"
+	| "ministral-3b-2512"
 	| "custom";
 export type CopilotModel = string;
 
@@ -101,13 +107,13 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	anthropicApiKey: "",
 	googleApiKey: "",
 	mistralApiKey: "",
-	openaiModel: "gpt-4.1-mini", // Updated default OpenAI model
-	openaiCustomModel: "", // Custom model name for OpenAI
-	anthropicModel: "claude-3-7-sonnet-latest", // Updated default Anthropic model
-	anthropicCustomModel: "", // Custom model name for Anthropic
-	googleModel: "gemini-2.0-flash", // Default Google model
-	googleCustomModel: "", // Custom model name for Google
-	mistralModel: "mistral-medium-2508",
+	openaiModel: "gpt-5.4-mini",
+	openaiCustomModel: "",
+	anthropicModel: "claude-sonnet-4-6",
+	anthropicCustomModel: "",
+	googleModel: "gemini-2.5-flash",
+	googleCustomModel: "",
+	mistralModel: "mistral-medium-3-5",
 	mistralCustomModel: "", // Custom model name for Mistral
 	// OpenAI-compatible endpoint defaults
 	openaiCompatibleEndpoint: "http://localhost:1234/v1", // Default LM Studio endpoint

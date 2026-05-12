@@ -1,4 +1,4 @@
-import { Plugin, TAbstractFile, TFile, normalizePath, Editor, MarkdownView, MarkdownFileInfo, Workspace, Platform, TFolder, Menu, Notice } from 'obsidian';
+import { Plugin, TAbstractFile, TFile, normalizePath, Editor, MarkdownView, MarkdownFileInfo, Platform, TFolder, Menu, Notice } from 'obsidian';
 import { PluginSettings, DEFAULT_SETTINGS, NoteNamingOption } from 'models/settings';
 import { TranscriptionSettingTab } from 'ui/settingsTab';
 import { ProcessingQueue } from './services/processingQueue';
@@ -9,6 +9,61 @@ import { AIService } from './services/aiService';
 import { NoteCreator } from './services/noteCreator';
 import { CopilotService } from './services/copilotService';
 import { ProcessingJob } from './models/processingJob';
+
+type LoadedPluginData = Partial<PluginSettings> & {
+	useFirstLineAsTitle?: boolean;
+};
+
+const CURRENT_OPENAI_MODELS = new Set<Exclude<PluginSettings["openaiModel"], "custom">>([
+	"gpt-5.5",
+	"gpt-5.4",
+	"gpt-5.4-mini",
+	"gpt-4o",
+	"gpt-4o-mini",
+]);
+
+const CURRENT_ANTHROPIC_MODELS = new Set<Exclude<PluginSettings["anthropicModel"], "custom">>([
+	"claude-opus-4-7",
+	"claude-sonnet-4-6",
+	"claude-haiku-4-5",
+]);
+
+const CURRENT_GOOGLE_MODELS = new Set<Exclude<PluginSettings["googleModel"], "custom">>([
+	"gemini-3.1-pro-preview",
+	"gemini-3-flash-preview",
+	"gemini-3.1-flash-lite",
+	"gemini-2.5-pro",
+	"gemini-2.5-flash",
+	"gemini-2.5-flash-lite",
+]);
+
+const CURRENT_MISTRAL_MODELS = new Set<Exclude<PluginSettings["mistralModel"], "custom">>([
+	"mistral-medium-3-5",
+	"mistral-small-2603",
+	"mistral-large-2512",
+	"mistral-medium-2508",
+	"ministral-14b-2512",
+	"ministral-8b-2512",
+	"ministral-3b-2512",
+]);
+
+function preserveLegacyModelSelection<TModel extends string>(
+	selectedModel: TModel | "custom",
+	customModel: string,
+	availableModels: ReadonlySet<TModel>,
+): { selectedModel: TModel | "custom"; customModel: string } {
+	if (selectedModel !== "custom" && !availableModels.has(selectedModel)) {
+		return {
+			selectedModel: "custom",
+			customModel: customModel || selectedModel,
+		};
+	}
+
+	return {
+		selectedModel,
+		customModel,
+	};
+}
 
 export default class ImageTranscriberPlugin extends Plugin {
 	settings: PluginSettings;
@@ -31,6 +86,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 		this.isMobileDevice = Platform.isMobile;
 
 		this.notificationService = new NotificationService(this.settings);
+		this.notificationService.setMobileMode(this.isMobileDevice);
 		this.copilotService = new CopilotService();
 		
 		this.addSettingTab(new TranscriptionSettingTab(this.app, this));
@@ -44,6 +100,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 			this.noteCreator = new NoteCreator(this.settings, this.notificationService, this.app);
 			this.processingQueue = new ProcessingQueue();
 			this.processingQueue.setProcessCallback(this.processImageFile.bind(this));
+			this.processingQueue.setMaxConcurrent(this.settings.maxConcurrentProcessing);
 
 			// Register vault event listeners now that the queue is ready
 			this.registerEvent(
@@ -59,104 +116,98 @@ export default class ImageTranscriberPlugin extends Plugin {
 								.setIcon('image-file')
 								.setSection('action-primary')
 								.onClick(async () => {
-									const targetFolder = file as TFolder;
+									const targetFolder = file;
 									new Notice(`Select images to add to folder: ${targetFolder.path}`);
 			
-									const input = document.createElement('input');
-									input.type = 'file';
+									const input = activeDocument.body.createEl('input', { type: 'file' });
 									input.accept = 'image/*';
 									input.multiple = true;
+									input.hide();
 			
-									input.onchange = async (event) => {
-										const M_inputElement = event.target as HTMLInputElement;
-										const selectedFiles = M_inputElement.files;
+									input.onchange = async () => {
+										try {
+											const selectedFiles = input.files;
 			
-										if (!selectedFiles || selectedFiles.length === 0) {
-											new Notice('No files selected or photo not captured successfully.');
-											if (M_inputElement) M_inputElement.value = ''; // Reset to allow retry
-											return;
-										}
+											if (!selectedFiles || selectedFiles.length === 0) {
+												new Notice('No files selected or photo not captured successfully.');
+												return;
+											}
 			
-										let showBatchImportNotice = true;
-										if (this.settings.transcribeOnlySpecificFolder) {
-											const specificFolderSetting = this.settings.specificFolderForTranscription;
-											if (!specificFolderSetting) {
-												showBatchImportNotice = false;
-											} else {
-												let normalizedSpecificFolder = normalizePath(specificFolderSetting);
-												if (normalizedSpecificFolder === '.') normalizedSpecificFolder = '/';
-												let normalizedTargetFolderPath = normalizePath(targetFolder.path);
-												if (normalizedTargetFolderPath === '.') normalizedTargetFolderPath = '/';
-			
-												if (normalizedTargetFolderPath !== normalizedSpecificFolder) {
+											let showBatchImportNotice = true;
+											if (this.settings.transcribeOnlySpecificFolder) {
+												const specificFolderSetting = this.settings.specificFolderForTranscription;
+												if (!specificFolderSetting) {
 													showBatchImportNotice = false;
+												} else {
+													let normalizedSpecificFolder = normalizePath(specificFolderSetting);
+													if (normalizedSpecificFolder === '.') normalizedSpecificFolder = '/';
+													let normalizedTargetFolderPath = normalizePath(targetFolder.path);
+													if (normalizedTargetFolderPath === '.') normalizedTargetFolderPath = '/';
+			
+													if (normalizedTargetFolderPath !== normalizedSpecificFolder) {
+														showBatchImportNotice = false;
+													}
 												}
 											}
-										}
 			
-										if (showBatchImportNotice) {
-											new Notice(`Importing ${selectedFiles.length} image(s) to ${targetFolder.name}...`);
-										}
-			
-										for (const browserFile of Array.from(selectedFiles)) {
-											const fileName = browserFile.name;
-											const destinationPath = normalizePath(`${targetFolder.path}/${fileName}`);
-											if (this.processingPaths.has(destinationPath)) {
-												new Notice(`File ${fileName} is already being processed. Skipped.`);
-												continue;
+											if (showBatchImportNotice) {
+												new Notice(`Importing ${selectedFiles.length} image(s) to ${targetFolder.name}...`);
 											}
 			
-											try {
-												this.processingPaths.add(destinationPath);
-			
-												const arrayBuffer = await browserFile.arrayBuffer();
-			
-												const existingFile = this.app.vault.getAbstractFileByPath(destinationPath);
-												if (existingFile) {
-													new Notice(`File ${fileName} already exists in ${targetFolder.name}. Skipped.`);
+											for (const browserFile of Array.from(selectedFiles)) {
+												const fileName = browserFile.name;
+												const destinationPath = normalizePath(`${targetFolder.path}/${fileName}`);
+												if (this.processingPaths.has(destinationPath)) {
+													new Notice(`File ${fileName} is already being processed. Skipped.`);
 													continue;
 												}
 			
-												const tFile = await this.app.vault.createBinary(destinationPath, arrayBuffer);
+												try {
+													this.processingPaths.add(destinationPath);
+													const arrayBuffer = await browserFile.arrayBuffer();
+													const existingFile = this.app.vault.getAbstractFileByPath(destinationPath);
+													if (existingFile) {
+														new Notice(`File ${fileName} already exists in ${targetFolder.name}. Skipped.`);
+														continue;
+													}
 			
-												if (tFile instanceof TFile && isImageFile(tFile)) {
-													let shouldQueue = true;
-													if (this.settings.transcribeOnlySpecificFolder) {
-														const specificFolderSetting = this.settings.specificFolderForTranscription;
-														if (!specificFolderSetting) {
-															shouldQueue = false;
-														} else {
-															let normalizedSpecificFolder = normalizePath(specificFolderSetting);
-															if (normalizedSpecificFolder === '.') normalizedSpecificFolder = '/';
-			
-															let normalizedTargetFolderPath = normalizePath(targetFolder.path);
-															if (normalizedTargetFolderPath === '.') normalizedTargetFolderPath = '/';
-															
-															if (normalizedTargetFolderPath !== normalizedSpecificFolder) {
+													const tFile = await this.app.vault.createBinary(destinationPath, arrayBuffer);
+													if (tFile instanceof TFile && isImageFile(tFile)) {
+														let shouldQueue = true;
+														if (this.settings.transcribeOnlySpecificFolder) {
+															const specificFolderSetting = this.settings.specificFolderForTranscription;
+															if (!specificFolderSetting) {
 																shouldQueue = false;
-																this.notificationService.notifyVerbose(`Imported ${fileName} to ${targetFolder.name}, but it's not the designated transcription folder. Not queueing.`);
+															} else {
+																let normalizedSpecificFolder = normalizePath(specificFolderSetting);
+																if (normalizedSpecificFolder === '.') normalizedSpecificFolder = '/';
+																let normalizedTargetFolderPath = normalizePath(targetFolder.path);
+																if (normalizedTargetFolderPath === '.') normalizedTargetFolderPath = '/';
+																if (normalizedTargetFolderPath !== normalizedSpecificFolder) {
+																	shouldQueue = false;
+																	this.notificationService.notifyVerbose(`Imported ${fileName} to ${targetFolder.name}, but it's not the designated transcription folder. Not queueing.`);
+																}
 															}
 														}
-													}
 			
-													if (shouldQueue) {
-														new Notice(`Imported ${fileName} to ${targetFolder.name}.`); 
-														this.processingQueue.addToQueue(tFile);
-														new Notice(`Added ${fileName} to transcription queue.`);
-													}
-												} else {
-													if (showBatchImportNotice) {
+														if (shouldQueue) {
+															new Notice(`Imported ${fileName} to ${targetFolder.name}.`);
+															this.processingQueue.addToQueue(tFile);
+															new Notice(`Added ${fileName} to transcription queue.`);
+														}
+													} else if (showBatchImportNotice) {
 														new Notice(`Imported ${fileName} to ${targetFolder.name}, but it's not a recognized image or failed to queue.`);
 													}
+												} catch {
+													new Notice(`Failed to import ${fileName}.`);
+												} finally {
+													this.processingPaths.delete(destinationPath);
 												}
-											} catch (error) {
-												console.error(`Error importing file ${fileName}:`, error);
-												new Notice(`Failed to import ${fileName}. Check console for details.`);
-											} finally {
-												this.processingPaths.delete(destinationPath);
 											}
+										} finally {
+											input.value = '';
+											input.remove();
 										}
-										if (M_inputElement) M_inputElement.value = '';
 									};
 			
 									input.click();
@@ -191,122 +242,90 @@ export default class ImageTranscriberPlugin extends Plugin {
 	}
 
 	private initializeMobileSupport() {
-		// Mobile-specific initialization code
-		console.log("Initializing mobile support for Notes to Markdown plugin");
-		
-		// Adjust processing queue for mobile - limit concurrent operations
-		// Mobile devices have less processing power
-		// Note: We'll need to add setMaxConcurrent to ProcessingQueue class
-		// this.processingQueue.setMaxConcurrent(1);
-		
-		// Handle mobile-specific file system access
-		// On iOS, file access might be more restricted
 		if (Platform.isIosApp) {
-			console.log("iOS-specific adjustments applied");
-			// iOS-specific adjustments for file handling
 			this.adjustForIOS();
-		} 
-		// Android-specific adjustments if needed
-		else if (Platform.isAndroidApp) {
-			console.log("Android-specific adjustments applied");
-			// Android-specific adjustments
+		} else if (Platform.isAndroidApp) {
 			this.adjustForAndroid();
 		}
 	}
 	
 	private adjustForIOS() {
-		// iOS-specific adjustments for file system limitations
-		console.log('Applying iOS-specific adjustments');
-		
-		// 1. Adjust file path handling for iOS
-		// iOS has a different file system structure and stricter permissions
-		
-		// 2. Modify image processing settings for iOS
-		// Reduce processing quality to improve performance on mobile
 		if (this.settings.imageQuality && this.settings.imageQuality > 80) {
-			console.log('Reducing image quality for iOS performance');
 			const previousQuality = this.settings.imageQuality;
-			this.settings.imageQuality = 80; // Lower quality for better performance
+			this.settings.imageQuality = 80;
 			this.notificationService.notifyVerbose(
 				`Mobile optimization: Image quality reduced from ${previousQuality} to 80 for better performance.`
 			);
 		}
-		
-		// 3. Handle iOS-specific file access patterns
-		// iOS may require different approaches to file access
-		
-		// 4. Adjust notification behavior for iOS
-		// iOS notifications should be more concise
 		this.notificationService.notifyInfo('Mobile compatibility mode enabled for iOS');
 	}
 	
 	private adjustForAndroid() {
-		// Android-specific adjustments for file system access patterns
-		console.log('Applying Android-specific adjustments');
-		
-		// 1. Handle Android storage permissions
-		// Android has a different permission model, especially for external storage
-		
-		// 2. Adjust image processing for Android
-		// Android devices vary widely in capabilities, so we need to be more adaptive
 		if (this.settings.mobileOptimizationEnabled) {
-			// Adjust concurrent processing for Android
-			const previousConcurrent = this.settings.maxConcurrentProcessing;
-			this.settings.maxConcurrentProcessing = 1; // Limit to 1 on Android for better stability
-			
-			// Adjust image quality if needed
+			this.settings.maxConcurrentProcessing = 1;
 			if (this.settings.imageQuality > 85) {
 				const previousQuality = this.settings.imageQuality;
-				this.settings.imageQuality = 85; // Slightly lower quality for better performance
+				this.settings.imageQuality = 85;
 				this.notificationService.notifyVerbose(
 					`Mobile optimization: Image quality adjusted from ${previousQuality} to 85 for Android.`
 				);
 			}
 		}
-		
-		// 3. Handle Android-specific file paths
-		// Android file paths may need special handling
-		
-		// 4. Adjust notification behavior for Android
 		this.notificationService.notifyInfo('Mobile compatibility mode enabled for Android');
 	}
 
 	async loadSettings() {
-        // Load saved data, potentially containing outdated settings format
-        const loadedData = await this.loadData();
+		const loadedData: LoadedPluginData | null = await this.loadData();
+		this.settings = { ...DEFAULT_SETTINGS };
 
-        // Start with default settings
-        this.settings = { ...DEFAULT_SETTINGS };
+		if (loadedData) {
+			this.settings = Object.assign(this.settings, loadedData);
 
-        // Merge loaded data onto defaults
-        if (loadedData) {
-            this.settings = Object.assign(this.settings, loadedData);
+			const oldSettingValue = loadedData.useFirstLineAsTitle;
+			if (typeof oldSettingValue === 'boolean' && !loadedData.noteNamingOption) {
+				this.settings.noteNamingOption = oldSettingValue
+					? NoteNamingOption.FirstLine
+					: NoteNamingOption.FolderDateNum;
+			}
 
-            // --- Settings Migration --- 
-            // Check if the old setting exists and the new one doesn't
-            // The `as any` is used here to access a potentially deprecated property
-            const oldSettingValue = (loadedData as any).useFirstLineAsTitle;
-            if (typeof oldSettingValue === 'boolean' && !loadedData.noteNamingOption) {
-                // console.log('Migrating old note naming setting...');
-                this.settings.noteNamingOption = oldSettingValue 
-                    ? NoteNamingOption.FirstLine 
-                    : NoteNamingOption.FolderDateNum; // Or choose a different default like ImageName if preferred for migration
-                
-                // Optionally remove the old setting from the object to keep data clean
-                // delete (this.settings as any).useFirstLineAsTitle; 
-                // Decided against deleting for now, Object.assign will overwrite anyway if we save later
-            }
-            // --- End Settings Migration ---
-        }
+			const openAiSelection = preserveLegacyModelSelection(
+				this.settings.openaiModel,
+				this.settings.openaiCustomModel,
+				CURRENT_OPENAI_MODELS,
+			);
+			this.settings.openaiModel = openAiSelection.selectedModel;
+			this.settings.openaiCustomModel = openAiSelection.customModel;
 
-		// Ensure processedImagePaths is always an array, even if saved data is corrupted/missing
+			const anthropicSelection = preserveLegacyModelSelection(
+				this.settings.anthropicModel,
+				this.settings.anthropicCustomModel,
+				CURRENT_ANTHROPIC_MODELS,
+			);
+			this.settings.anthropicModel = anthropicSelection.selectedModel;
+			this.settings.anthropicCustomModel = anthropicSelection.customModel;
+
+			const googleSelection = preserveLegacyModelSelection(
+				this.settings.googleModel,
+				this.settings.googleCustomModel,
+				CURRENT_GOOGLE_MODELS,
+			);
+			this.settings.googleModel = googleSelection.selectedModel;
+			this.settings.googleCustomModel = googleSelection.customModel;
+
+			const mistralSelection = preserveLegacyModelSelection(
+				this.settings.mistralModel,
+				this.settings.mistralCustomModel,
+				CURRENT_MISTRAL_MODELS,
+			);
+			this.settings.mistralModel = mistralSelection.selectedModel;
+			this.settings.mistralCustomModel = mistralSelection.customModel;
+		}
+
 		if (!this.settings.processedImagePaths || !Array.isArray(this.settings.processedImagePaths)) {
-			// console.warn('Processed image paths missing or invalid in settings data. Initializing as empty array.');
 			this.settings.processedImagePaths = [];
 		}
-        
-        // Save settings *after* potential migration to ensure the new format is stored
-        await this.saveSettings();
+
+		await this.saveSettings();
 	}
 
 	async saveSettings() {
@@ -314,13 +333,6 @@ export default class ImageTranscriberPlugin extends Plugin {
 	}
 
 	private async handleFileCreate(file: TAbstractFile) {
-		// Mobile-specific handling for file creation
-		if (this.isMobileDevice) {
-			// On mobile, we might need to handle file creation differently
-			console.log(`Mobile file creation detected: ${file.path}`);
-			// Additional mobile-specific processing can be added here
-		}
-		
 		// --- Initial Checks ---
 		// 1. Check if this file path was flagged as dropped in the editor
 		if (file instanceof TFile && this.droppedInEditorPaths.has(file.path)) {
@@ -375,9 +387,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 		this.processingPaths.add(file.path);
 
 		try {
-			// console.log(`Adding initial file to processing queue: ${file.path}`);
-			// Add the initial TFile object to the queue
-			this.processingQueue.addToQueue(file as TFile);
+			this.processingQueue.addToQueue(file);
 		} catch (error) {
 			console.error(`Error adding file ${file.path} to processing queue:`, error);
 		} finally {
@@ -522,8 +532,6 @@ export default class ImageTranscriberPlugin extends Plugin {
 			// Check for existing file at the target path before moving
 			const existingImage = this.app.vault.getAbstractFileByPath(newImagePath);
 			if (existingImage && existingImage instanceof TFile) {
-				const warnMsg = `Image named '${fileToMove.name}' already exists in '${targetFolder}'. Skipping transcription.`;
-				console.warn(warnMsg);
 				this.notificationService.notifyError(`Failed to process ${fileToMove.name}: A file with this name already exists in '${targetFolder}'.`);
 				return null; // Indicate failure
 			}
@@ -654,7 +662,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 	 * Handles files dropped directly onto the editor.
 	 * We want to prevent transcription for these images as Obsidian handles them.
 	 */
-	private async handleEditorDrop(evt: DragEvent, editor: Editor, info: MarkdownView | MarkdownFileInfo): Promise<void> {
+	private async handleEditorDrop(evt: DragEvent, _editor: Editor, info: MarkdownView | MarkdownFileInfo): Promise<void> {
 		// console.log('Editor drop event detected.');
 		if (!evt.dataTransfer) {
 			// console.log('No dataTransfer object found on event.');
@@ -687,11 +695,9 @@ export default class ImageTranscriberPlugin extends Plugin {
 
 						// Cleanup mechanism: Remove the path after a short delay
 						// This handles cases where the 'create' event might not fire or be missed
-						setTimeout(() => {
-							if (this.droppedInEditorPaths.delete(destinationPath)) {
-								// console.log(`Cleaned up droppedInEditorPaths: ${destinationPath}`);
-							}
-						}, 1500); // 1.5 second delay
+						activeWindow.setTimeout(() => {
+							this.droppedInEditorPaths.delete(destinationPath);
+						}, 1500);
 					}
 				} catch (error) {
 					console.error(`Error determining attachment path for ${file.name}:`, error);

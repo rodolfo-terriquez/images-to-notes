@@ -1,8 +1,10 @@
 /* Ensure text areas fill the entire width */
-.imgtono-setting-item-control textarea {
-    width: 100% !important;
-    box-sizing: border-box !important;
-    max-width: 100% !important;
+.imgtono-setting-item-control textarea,
+.imgtono-setting-item-control .imgtono-full-width-input,
+.imgtono-setting-item-control .imgtono-full-width-select {
+    width: 100%;
+    box-sizing: border-box;
+    max-width: 100%;
 }
 
 /* Vertical layout container */
@@ -126,16 +128,18 @@
 @media (max-width: 768px) {
     /* Force all setting controls to take full width on mobile */
     .imgtono-setting-item-control {
-        width: 100% !important;
-        display: flex !important;
-        flex-direction: column !important;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
     }
 
     /* Force text areas to take full width on mobile */
-    .imgtono-setting-item-control textarea {
-        width: 100% !important;
-        max-width: none !important;
-        margin-right: 0 !important;
+    .imgtono-setting-item-control textarea,
+    .imgtono-setting-item-control .imgtono-full-width-input,
+    .imgtono-setting-item-control .imgtono-full-width-select {
+        width: 100%;
+        max-width: none;
+        margin-right: 0;
     }
 
     /* Increase touch target size for mobile */
@@ -177,6 +181,13 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
+}
+
+.imgtono-confirmation-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
 }
 
 .imgtono-spinner {
