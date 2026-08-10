@@ -21,9 +21,18 @@ import {
 	NoteNamingOption,
 	TranscriptionPlacement,
 } from "../models/settings"; // Import relevant types AND DEFAULTS AND NoteNamingOption
+import { getPreservedModelOptions } from "../utils/modelSelection";
+
+const MANAGED_BETA_FORM_URL =
+	"https://docs.google.com/forms/d/e/1FAIpQLSfog58t5rqlAbjvf8lpUMCRs1dupPGhqz7kTmW9aL2sQ0hGcg/viewform";
+const PRIVACY_URL = "https://madebyrodolfo.com/privacy/";
 
 // Define available models - These should match the types in settings.ts
 const OPENAI_MODELS: Record<OpenAiModel, string> = {
+	"gpt-5.6-sol": "GPT-5.6 Sol",
+	"gpt-5.6-terra": "GPT-5.6 Terra",
+	"gpt-5.6-luna": "GPT-5.6 Luna",
+	"gpt-5.4-nano": "GPT-5.4 Nano",
 	"gpt-5.5": "GPT-5.5",
 	"gpt-5.4": "GPT-5.4",
 	"gpt-5.4-mini": "GPT-5.4 Mini",
@@ -33,6 +42,9 @@ const OPENAI_MODELS: Record<OpenAiModel, string> = {
 };
 
 const ANTHROPIC_MODELS: Record<AnthropicModel, string> = {
+	"claude-fable-5": "Claude Fable 5",
+	"claude-opus-5": "Claude Opus 5",
+	"claude-sonnet-5": "Claude Sonnet 5",
 	"claude-opus-4-7": "Claude Opus 4.7",
 	"claude-sonnet-4-6": "Claude Sonnet 4.6",
 	"claude-haiku-4-5": "Claude Haiku 4.5",
@@ -40,6 +52,9 @@ const ANTHROPIC_MODELS: Record<AnthropicModel, string> = {
 };
 
 const GOOGLE_MODELS: Record<GoogleModel, string> = {
+	"gemini-3.6-flash": "Gemini 3.6 Flash",
+	"gemini-3.5-flash": "Gemini 3.5 Flash",
+	"gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite",
 	"gemini-3.1-pro-preview": "Gemini 3.1 Pro (Preview)",
 	"gemini-3-flash-preview": "Gemini 3 Flash (Preview)",
 	"gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite",
@@ -150,6 +165,26 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 					}),
 			);
 
+		const betaDescription = document.createDocumentFragment();
+		betaDescription.append(
+			"Use Images to Notes without creating an AI account or managing an API key. Proposed beta: $6 USD/month for up to 200 images. No charge today. ",
+		);
+		betaDescription.createEl("a", {
+			text: "Privacy details",
+			href: PRIVACY_URL,
+			attr: { target: "_blank", rel: "noopener noreferrer" },
+		});
+
+		new Setting(containerEl)
+			.setName("Managed transcription beta")
+			.setDesc(betaDescription)
+			.addButton((button) =>
+				button
+					.setButtonText("Request a beta spot")
+					.setCta()
+					.onClick(() => window.open(MANAGED_BETA_FORM_URL, "_blank")),
+			);
+
 		// --- Provider Specific Settings ---
 		const providerDesc = containerEl.createDiv({ cls: "imgtono-provider-settings-desc" }); // Container for descriptions/warnings
 		providerDesc.empty(); // Clear previous warnings
@@ -190,7 +225,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 			new Setting(containerEl)
 				.setName("OpenAI model")
 				.setDesc(
-					"Select the OpenAI model to use. GPT-5.4 Mini is a strong current default for cost and latency, while GPT-5.5 is the flagship choice.",
+					"Select the OpenAI model to use. GPT-5.4 Mini remains the default; newer models may have different pricing and availability.",
 				)
 				.addDropdown((dropdown) => {
 					// Use the imported type and constant
@@ -565,42 +600,43 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 					// Fetch models asynchronously and populate dropdown
 					copilotService
 					.listModels(this.plugin.settings.copilotOAuthToken)
-					.then(async (models) => {
-						models.sort((a, b) => a.localeCompare(b));
-
-						dropdown.selectEl.empty();
-						for (const modelId of models) {
-							dropdown.addOption(modelId, modelId);
-						}
-						dropdown.addOption("custom", "Custom Model");
-
+					.then((models) => {
 						const currentModel = this.plugin.settings.copilotModel;
-						if (models.includes(currentModel) || currentModel === "custom") {
-							dropdown.setValue(currentModel);
-						} else if (models.length > 0) {
-							dropdown.setValue(models[0]);
-							this.plugin.settings.copilotModel = models[0];
-							await this.plugin.saveSettings();
-						}
-
-						descEl.empty();
-						descEl.setText("Select the model to use via GitHub Copilot.");
-					})
-					.catch(async () => {
-						// On failure, only show "Custom Model"
+						const options = getPreservedModelOptions(currentModel, models);
 						dropdown.selectEl.empty();
-						dropdown.addOption("custom", "Custom Model");
-						dropdown.setValue("custom");
-
-						if (this.plugin.settings.copilotModel !== "custom") {
-							this.plugin.settings.copilotModel = "custom";
-							await this.plugin.saveSettings();
+						for (const modelId of options) {
+							dropdown.addOption(
+								modelId,
+								modelId === "custom" ? "Custom Model" : modelId,
+							);
 						}
-
-						customModelSetting.settingEl.show();
+						dropdown.setValue(currentModel);
+						customModelSetting.settingEl.toggle(currentModel === "custom");
 
 						descEl.empty();
-						descEl.setText("Failed to load models. Enter a model name manually, or try logging out and back in.");
+						descEl.setText(
+							currentModel !== "custom" && !models.includes(currentModel)
+								? "Your saved model is no longer advertised by GitHub Copilot. It will remain selected until you choose another model."
+								: "Select the model to use via GitHub Copilot.",
+						);
+					})
+					.catch(() => {
+						const currentModel = this.plugin.settings.copilotModel;
+						const options = getPreservedModelOptions(currentModel, []);
+						dropdown.selectEl.empty();
+						for (const modelId of options) {
+							dropdown.addOption(
+								modelId,
+								modelId === "custom" ? "Custom Model" : modelId,
+							);
+						}
+						dropdown.setValue(currentModel);
+						customModelSetting.settingEl.toggle(currentModel === "custom");
+
+						descEl.empty();
+						descEl.setText(
+							"Failed to refresh models. Your saved selection was not changed; try logging out and back in if the problem continues.",
+						);
 					});
 				});
 

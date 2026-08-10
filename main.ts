@@ -9,12 +9,17 @@ import { AIService } from './services/aiService';
 import { NoteCreator } from './services/noteCreator';
 import { CopilotService } from './services/copilotService';
 import { ProcessingJob } from './models/processingJob';
+import { preserveLegacyModelSelection } from './utils/modelSelection';
 
 type LoadedPluginData = Partial<PluginSettings> & {
 	useFirstLineAsTitle?: boolean;
 };
 
 const CURRENT_OPENAI_MODELS = new Set<Exclude<PluginSettings["openaiModel"], "custom">>([
+	"gpt-5.6-sol",
+	"gpt-5.6-terra",
+	"gpt-5.6-luna",
+	"gpt-5.4-nano",
 	"gpt-5.5",
 	"gpt-5.4",
 	"gpt-5.4-mini",
@@ -23,12 +28,18 @@ const CURRENT_OPENAI_MODELS = new Set<Exclude<PluginSettings["openaiModel"], "cu
 ]);
 
 const CURRENT_ANTHROPIC_MODELS = new Set<Exclude<PluginSettings["anthropicModel"], "custom">>([
+	"claude-fable-5",
+	"claude-opus-5",
+	"claude-sonnet-5",
 	"claude-opus-4-7",
 	"claude-sonnet-4-6",
 	"claude-haiku-4-5",
 ]);
 
 const CURRENT_GOOGLE_MODELS = new Set<Exclude<PluginSettings["googleModel"], "custom">>([
+	"gemini-3.6-flash",
+	"gemini-3.5-flash",
+	"gemini-3.5-flash-lite",
 	"gemini-3.1-pro-preview",
 	"gemini-3-flash-preview",
 	"gemini-3.1-flash-lite",
@@ -46,24 +57,6 @@ const CURRENT_MISTRAL_MODELS = new Set<Exclude<PluginSettings["mistralModel"], "
 	"ministral-8b-2512",
 	"ministral-3b-2512",
 ]);
-
-function preserveLegacyModelSelection<TModel extends string>(
-	selectedModel: TModel | "custom",
-	customModel: string,
-	availableModels: ReadonlySet<TModel>,
-): { selectedModel: TModel | "custom"; customModel: string } {
-	if (selectedModel !== "custom" && !availableModels.has(selectedModel)) {
-		return {
-			selectedModel: "custom",
-			customModel: customModel || selectedModel,
-		};
-	}
-
-	return {
-		selectedModel,
-		customModel,
-	};
-}
 
 export default class ImageTranscriberPlugin extends Plugin {
 	settings: PluginSettings;

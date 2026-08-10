@@ -1,6 +1,6 @@
 # Images to Notes
 
-Use AI to transcribe photos of handwritten or printed notes into Markdown, creates a new note for each image, then adds the image to the bottom of the Note. 
+Use AI to transcribe photos of handwritten or printed notes into Markdown. The plugin creates a new note for each image, then adds the image to the note.
 
 Great for:
 - Class notes
@@ -12,7 +12,7 @@ It supports images in the following formats: .jpg, .jpeg, .png, and .heic
 ## How it Works
 
 1.  Install and enable the plugin.
-2.  Configure the settings (API provider, API key, model). I recommend using GPT-4.1 Mini for its low cost and high accuracy.
+2.  Configure the settings (API provider, authentication, and model). The default model is a reasonable starting point, but pricing and availability vary by provider.
 3.  Drag and drop your image into a folder in the Obsidian file explorer pane.
 4.  The plugin will transcribe your image into a new note and add the image at the bottom.
 
@@ -32,13 +32,31 @@ In the plugin settings:
 
 That's it, everything else is optional.
 
+The model menus contain a curated set of current and older supported models. You can also enter a custom model ID for any supported provider. Updating the catalog never automatically changes your saved model selection. GitHub Copilot models are fetched dynamically, and a saved model remains selected even if a refresh omits it or fails.
+
+## Optional managed beta
+
+The plugin settings contain a static link to request a spot in a proposed managed transcription beta: **$6 USD per month for up to 200 images**. The beta is intended for people who do not want to create an AI provider account or manage an API key.
+
+The managed service has not been built, there is no charge today, and submitting the interest form does not create a subscription. The existing bring-your-own-key and GitHub Copilot options remain free features of the plugin.
+
+[Request a beta spot](https://docs.google.com/forms/d/e/1FAIpQLSfog58t5rqlAbjvf8lpUMCRs1dupPGhqz7kTmW9aL2sQ0hGcg/viewform)
+
+## Network use and privacy
+
+When you process an image using OpenAI, Anthropic, Google Gemini, Mistral, an OpenAI-compatible endpoint, or GitHub Copilot, the plugin sends the image and your configured prompts directly to that provider. The provider's terms, privacy policy, account access, and pricing apply.
+
+In the current bring-your-own-key and GitHub Copilot modes, the plugin developer does not receive your images or transcriptions. Images to Notes has no analytics, tracking, or client-side telemetry. API credentials and plugin settings are stored in the plugin configuration associated with your Obsidian vault; your Obsidian and sync configuration determines where that configuration is copied.
+
+Opening the managed-beta link takes you to a Google Form. Information submitted there is handled as described in the [Images to Notes privacy notice](https://madebyrodolfo.com/privacy/).
+
 
 ## Configuration
 
 The plugin settings allow you to customize how your images are processed and where the output files are stored.
 
-*   **API Provider:** Choose between OpenAI, Anthropic, Google, Mistral, and GitHub Copilot.
-*   **API Key:** Enter the API key for your chosen provider. (Not required for GitHub Copilot)
+*   **API Provider:** Choose between OpenAI, Anthropic, Google, Mistral, an OpenAI-compatible endpoint, and GitHub Copilot.
+*   **API Key:** Enter the API key for your chosen provider. (Not required for GitHub Copilot or compatible endpoints that do not require authentication.)
 *   **Model:** Select the specific AI model you want to use for transcription.
 *   **System Prompt:** Defines the overall role or context for the AI (e.g., "You are an expert at transcribing handwritten notes..."). You can customize this and reset it to the default if needed.
 *   **User Prompt:** The specific instruction for the AI for each image. You can edit this to better suit your note style or change the output format.

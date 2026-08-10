@@ -10,6 +10,10 @@ export enum ApiProvider {
 
 // Specific model types for better type safety
 export type OpenAiModel =
+	| "gpt-5.6-sol"
+	| "gpt-5.6-terra"
+	| "gpt-5.6-luna"
+	| "gpt-5.4-nano"
 	| "gpt-5.5"
 	| "gpt-5.4"
 	| "gpt-5.4-mini"
@@ -17,11 +21,17 @@ export type OpenAiModel =
 	| "gpt-4o-mini"
 	| "custom";
 export type AnthropicModel =
+	| "claude-fable-5"
+	| "claude-opus-5"
+	| "claude-sonnet-5"
 	| "claude-opus-4-7"
 	| "claude-sonnet-4-6"
 	| "claude-haiku-4-5"
 	| "custom";
 export type GoogleModel =
+	| "gemini-3.6-flash"
+	| "gemini-3.5-flash"
+	| "gemini-3.5-flash-lite"
 	| "gemini-3.1-pro-preview"
 	| "gemini-3-flash-preview"
 	| "gemini-3.1-flash-lite"
