@@ -165,7 +165,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 					}),
 			);
 
-		const betaDescription = document.createDocumentFragment();
+		const betaDescription = createFragment();
 		betaDescription.append(
 			"Use Images to Notes without creating an AI account or managing an API key. Proposed beta: $6 USD/month for up to 200 images. No charge today. ",
 		);

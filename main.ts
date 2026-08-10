@@ -688,7 +688,7 @@ export default class ImageTranscriberPlugin extends Plugin {
 
 						// Cleanup mechanism: Remove the path after a short delay
 						// This handles cases where the 'create' event might not fire or be missed
-						activeWindow.setTimeout(() => {
+						window.setTimeout(() => {
 							this.droppedInEditorPaths.delete(destinationPath);
 						}, 1500);
 					}
